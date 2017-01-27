@@ -13,10 +13,10 @@ int main(int argc, char **argv) {
   FILE *f4=fopen("potential_ad.dat","w");
   FILE *f5=fopen("population.dat","w");
   FILE *f6=fopen("potential_di.dat","w");
-  FILE *f7=fopen("average.dat","w");
-  
+  FILE *f7=fopen("test.dat","w");
+
   init_param();  /* Initialize input parameters */
-  init_prop();   /* Initialize the kinetic & potential propagators */
+  init_prop(f7);   /* Initialize the kinetic & potential propagators */
   init_wavefn(); /* Initialize the electron wave function */
   print_pot_ad(f4);
   print_pot_di(f6);
@@ -24,7 +24,6 @@ int main(int argc, char **argv) {
 
   for (step=1; step<=NSTEP; step++) {
     single_step(step); /* Time propagation for one step, DT */
-    print_avg(step,f7);
     if (step%NECAL==0) {
       pop_states();
       print_pop(step,f5);
@@ -43,9 +42,8 @@ void init_param() {
   Initializes parameters by reading them from standard input.
 ------------------------------------------------------------------------------*/
   /* Initialize control parameters */
-  LX=50.0;
-  DT=0.1;
-/*  NSTEP=8000;*/
+  LX=8.0;
+  DT=0.02;
   NECAL=1;
   NNCAL=100;
 
@@ -54,18 +52,30 @@ void init_param() {
 }
 
 /*----------------------------------------------------------------------------*/
-void init_prop() {
+void init_prop(FILE *f7) {
 /*------------------------------------------------------------------------------
   Initializes the kinetic & potential propagators.
 ------------------------------------------------------------------------------*/
   int i;
   double x, k;
-  
+
   A=0.01;
   B=1.6;
   C=0.005;
-  D=1.0;  
+  D=1.0;
   M=2000;
+
+  D1=0.02278; /*Parameter for Morse potential*/
+  B1=0.675;
+  b1=2.0;
+  E1=0;
+  D2=0.01025;
+  B2=0.953;
+  b2=3.212;
+  E2=0.0038;
+  A12=0.006337;
+  b12=0.56;
+  Rx=2.744;
 
   /* Set up kinetic propagators */
   for (i=0; i<=NX; i++) {
@@ -73,37 +83,50 @@ void init_prop() {
       k = 2*M_PI*i/LX;
     else
       k = 2*M_PI*(i-NX)/LX;
-    
-    /* kinetic operator */ 
+
+    /* kinetic operator */
     T[i] = k*k*0.5/M;
     /* kinetic propagator */
     t[i][0] = cos(-DT*T[i]);
     t[i][1] = sin(-DT*T[i]);
   }
   dp= 2*M_PI/LX;
-  
   /* Set up potential propagator */
   for (i=1; i<=NX; i++) {
-    x = -0.5*LX + dx*i;
+    x = -0.2*LX+ dx*i;
     /* Construct the matrix h */
-    h[i][0][0] = A*(1-exp(-B*fabs(x)))*x/fabs(x);
-    h[i][0][1] = C*exp(-D*x*x);
-    h[i][1][0] = h[i][0][1];
-    h[i][1][1] = -h[i][0][0];
-    if(i==NX/2) {
-      h[i][0][0] = 0;
-      h[i][0][1] = C;
-      h[i][1][0] = C;
-      h[i][1][1] = 0;
+    /*Tully 2 potential */
+    /* h[i][0][0] = A*(1-exp(-B*fabs(x)))*x/fabs(x);
+     h[i][0][1] = C*exp(-D*x*x);
+     h[i][1][0] = h[i][0][1];
+     h[i][1][1] = -h[i][0][0];
+     if(i==NX/2) {
+       h[i][0][0] = 0;
+       h[i][0][1] = C;
+       h[i][1][0] = C;
+       h[i][1][1] = 0;
+     }*/
+    /*Morse potential*/
+    h[i][0][0]=D1*(1-exp(-B1*(x-b1)))*(1-exp(-B1*(x-b1)))+E1;
+    h[i][1][1]=D2*(1-exp(-B2*(x-b2)))*(1-exp(-B2*(x-b2)))+E2;
+    h[i][1][0]=A12*exp(-b12*(x-Rx)*(x-Rx));
+    h[i][0][1]=h[i][1][0];
+
+    if (h[i][1][1]>h[i][0][0]){
+      intersect=i;
+      printf("%8i\n",intersect);
     }
+
+
     /* calc eigenvalues of h */
     calc_eigenvalues(i);
     /* calc De and Det */
-    calc_De_and_Det(i); 
+    calc_De_and_Det(i,f7);
     /* Half-step diagonal propagator */
     /* 1st component */
     u[i][0][0] = cos(-0.5*DT*E[i][0]);
     u[i][0][1] = sin(-0.5*DT*E[i][0]);
+
     /* 2nd component */
     u[i][1][0] = cos(-0.5*DT*E[i][1]);
     u[i][1][1] = sin(-0.5*DT*E[i][1]);
@@ -117,21 +140,21 @@ void init_wavefn() {
 ------------------------------------------------------------------------------*/
   int sx,s;
   double x,gauss,Csq,norm_fac;
-
-  X0=-5.8;
-  S0=1;
-  P0=55;    //sb: 55
+  /*Parameter for Tully surface in comment*/
+  X0=0; /*-5.8*/
+  S0=2.5;    /*1*/
+  P0=0;   /*55*/ //sb: 55
 
   /* Calculate the the wave function value mesh point-by-point */
   for (sx=1; sx<=NX; sx++) {
-    x = -0.5*LX + dx*sx;
+    x = -0.2*LX+ dx*sx;
     gauss = exp(-S0*(x-X0)*(x-X0));
     C1[sx][0] = gauss*cos(P0*(x-X0)); 	/* wf on surface 1 */
-    C1[sx][1] = gauss*sin(P0*(x-X0)); 
+    C1[sx][1] = gauss*sin(P0*(x-X0));
     C2[sx][0] = 0;			/* wf on surface 2 */
     C2[sx][1] = 0;
   }//[0] represent the real part and [i] represent the imaginary part e(it)=cos(t)+isin(t)
-  
+
   /* Normalize C1 */
   Csq=0.0;
   for (sx=1; sx<=NX; sx++)
@@ -142,7 +165,7 @@ void init_wavefn() {
   for (sx=1; sx<=NX; sx++)
     for (s=0; s<2; s++)
       C1[sx][s] *= norm_fac;
-  
+
   /* Normalize C2 */
 /*    Csq=0.0;
     for (sx=1; sx<=NX; sx++)
@@ -196,13 +219,13 @@ checked for!).
       SWAP(data[j+1],data[i+1]);
     }
     m=nn;
-    while (m >= 2 && j > m) { 
+    while (m >= 2 && j > m) {
       j -= m;
       m >>= 1;
     }
     j += m;
   }
-  
+
   mmax=2;
   while (n > mmax) { /* Outer loop executed log2 nn times. */
     istep=mmax << 1;
@@ -214,13 +237,13 @@ checked for!).
     wi=0.0;
     for (m=1;m<mmax;m+=2) { /* Here are the two nested inner loops. */
       for (i=m;i<=n;i+=istep) {
-	j=i+mmax; /* This is the Danielson-Lanczos formula. */
-	tempr=wr*data[j]-wi*data[j+1];
-	tempi=wr*data[j+1]+wi*data[j];
-	data[j]=data[i]-tempr;
-	data[j+1]=data[i+1]-tempi;
-	data[i] += tempr;
-	data[i+1] += tempi;
+        j=i+mmax; /* This is the Danielson-Lanczos formula. */
+        tempr=wr*data[j]-wi*data[j+1];
+        tempi=wr*data[j+1]+wi*data[j];
+        data[j]=data[i]-tempr;
+        data[j+1]=data[i+1]-tempi;
+        data[i] += tempr;
+        data[i+1] += tempi;
       }
       wr=(wtemp=wr)*wpr-wi*wpi+wr; /* Trigonometric recurrence. */
       wi=wi*wpr+wtemp*wpi+wi;
@@ -266,13 +289,12 @@ void calc_eigenvalues(int i) {
   //E2 = (h11+h22-sqrt((h11-h22)*(h11-h22)+4*h12*h21))/2;
   E[i][0] = (h[i][0][0]+h[i][1][1]+sqrt((h[i][0][0]-h[i][1][1])*(h[i][0][0]-h[i][1][1])+4*h[i][0][1]*h[i][1][0]))/2;
   E[i][1] = (h[i][0][0]+h[i][1][1]-sqrt((h[i][0][0]-h[i][1][1])*(h[i][0][0]-h[i][1][1])+4*h[i][0][1]*h[i][1][0]))/2;
-
 }
 /*----------------------------------------------------------------------------*/
-void calc_De_and_Det(int i) {
+void calc_De_and_Det(int i, FILE *f7) {
   double norm_fac;
   /* De */
-  if(i<=NX/2) {
+  if(i<=intersect) {
     /* 1st column = 1st eigenvector */
     De[i][0][0] = h[i][0][1]/(E[i][0]-h[i][0][0]);
     De[i][1][0] = 1;
@@ -280,8 +302,8 @@ void calc_De_and_Det(int i) {
     De[i][0][0] /= norm_fac;
     De[i][1][0] /= norm_fac;
     /* 2nd column = 2nd eigenvector */
-    De[i][0][1] = -De[i][1][0];	
-    De[i][1][1] = De[i][0][0];		
+    De[i][0][1] = -De[i][1][0];
+    De[i][1][1] = De[i][0][0];
   }
   else {
     /* 2nd column = 2nd eigenvector */
@@ -291,13 +313,14 @@ void calc_De_and_Det(int i) {
     De[i][0][1] /= norm_fac;
     De[i][1][1] /= norm_fac;
     /* 1st column = 1st eigenvector */
-    De[i][1][0] = -De[i][0][1];	
-    De[i][0][0] = De[i][1][1];		
+    De[i][1][0] = -De[i][0][1];
+    De[i][0][0] = De[i][1][1];
   }
   Det[i][0][0] = De[i][0][0];
   Det[i][1][1] = De[i][1][1];
   Det[i][1][0] = De[i][0][1];
   Det[i][0][1] = De[i][1][0];
+  fprintf(f7,"%15.10f %15.10f %15.10f %15.10f\n",Det[i][0][0],Det[i][0][1],Det[i][1][0],Det[i][1][1]);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -325,7 +348,7 @@ void pot_prop() {
     /* 2nd component */
     wr2=u[sx][1][0]*C2[sx][0]-u[sx][1][1]*C2[sx][1];
     wi2=u[sx][1][0]*C2[sx][1]+u[sx][1][1]*C2[sx][0];
-    
+
     C1[sx][0]=wr1;
     C1[sx][1]=wi1;
     C2[sx][0]=wr2;
@@ -349,7 +372,7 @@ void kin_prop() {
 -------------------------------------------------------------------------------*/
   int sx,s;
   double wr,wi;
-  
+
   for (sx=1; sx<=NX; sx++) {
     /* 1st component C1 */
     wr=t[sx][0]*C1[sx][0]-t[sx][1]*C1[sx][1];
@@ -361,7 +384,7 @@ void kin_prop() {
     wi=t[sx][0]*C2[sx][1]+t[sx][1]*C2[sx][0];
     C2[sx][0]=wr;
     C2[sx][1]=wi;
-  }	
+  }
 }
 /*----------------------------------------------------------------------------*/
 void single_step(int step) {
@@ -369,24 +392,24 @@ void single_step(int step) {
   Propagates the wave function for a unit time step, DT.
 ------------------------------------------------------------------------------*/
   int j, s, i, ibis;
-  double  x, k, x1, x2, p_1, p_2, csq1r, csq2r, csq1p, csq2p, norm_x1, norm_x2, norm_p1, norm_p2; /*minuscule*/
+  /*double  x, k, x1, x2, p_1, p_2, csq1r, csq2r, csq1p, csq2p, norm_x1, norm_x2, norm_p1, norm_p2;*/ /*minuscule*/
   /* half step potential propagation */
-  pot_prop();  
-  /* fft of the 2 components of <r|psi> */	
-  /* 1st component */	
+  pot_prop();
+  /* fft of the 2 components of <r|psi> */
+  /* 1st component */
   create_C1f();
   four1(Cf, (unsigned long) NX, -1);
-  for (j=0; j <= 2*(NX+1); j++) 
+  for (j=0; j <= 2*(NX+1); j++)
     Cf[j] /= NX;
   update_C1();
-  /* 2nd component */	
+  /* 2nd component */
   create_C2f();
   four1(Cf, (unsigned long) NX, -1);
-  for (j=0; j <= 2*(NX+1); j++) 
+  for (j=0; j <= 2*(NX+1); j++)
     Cf[j] /= NX;
   update_C2();
   /* step kinetic propagation   */
-  kin_prop(); 
+  kin_prop();
   /* fft^(-1) */
   /* 1st component */
   create_C1f();
@@ -398,89 +421,8 @@ void single_step(int step) {
   update_C2();
   /* half step potential propagation */
   pot_prop();
-  /*compute the average of position and momentum*/  
-   x1=0.0;
-   x2=0.0;
-   p_1=0.0;
-   p_2=0.0;
-   norm_x1=0.0;
-   norm_x2=0.0;
-   norm_p1=0.0;
-   norm_p2=0.0;
-
-   for (i=1; i<=NX; i++) {
-    	x =-0.5*LX+ dx*i;
-    	csq1r=0.0;
-	csq1p=0.0;
-    	csq2r=0.0;
-	csq2p=0.0;
-    	for (s=0; s<2; s++){
-    		csq1r+=C1[i][s]*C1[i][s];
-        	csq2r+=C2[i][s]*C2[i][s];
-    	}
-    	csq1r *=dx;
-    	csq2r *=dx;
-        norm_x1+=csq1r;
-        norm_x2+=csq2r;
-
-
-    	x1 += csq1r*x;
-    	x2 += csq2r*x;
-  
-    	create_C1f();
-    	four1(Cf, (unsigned long) NX,-1);
-    	for (j=0; j<=2*(NX+1); j++)
-		Cf[j]/=NX;
-    	update_C1();
-
-    	create_C2f();
-    	four1(Cf, (unsigned long) NX,-1);
-  	    for (j=0; j<=2*(NX+1); j++)
-    	   	 Cf[j]/=NX;
-	    update_C2();
-  
-   	 for (s=0; s<2; s++){
-         	csq1p+=C1[i][s]*C1[i][s];
-		csq2p+=C2[i][s]*C2[i][s];
-   	 }
- 	 csq1p *=dp;
-	 csq2p *=dp;
-	 if (i < NX/2){
-      		k = 2*M_PI*i/LX;}
-	
-    	 else{
-      		k = 2*M_PI*(i-NX)/LX;
-	 }
-
-	 norm_p1+=csq1p;
-         norm_p2+=csq2p;
-
-   	 p_1 += csq1p*k;
-         p_2 += csq2p*k;
-
-         create_C1f();
-    	 four1(Cf, (unsigned long) NX, 1);
- 	 update_C1();
-  	 create_C2f();
-  	 four1(Cf, (unsigned long) NX, 1);
-  	 update_C2();
-
-   }
-   if (norm_x2 < pow(10,-10)){
-	X2[step]=0;
-	MP_2[step]=0;
-   }
-   else{
-	X2[step]=x2/norm_x2;
-	MP_2[step]=p_2/norm_p2;
-   }
-   X1[step]=x1/norm_x1;
-   
-   MP_1[step]=p_1/norm_p1;
-  
-   X_avg[step]=(X1[step]*norm_x1+X2[step]*norm_x2)/(norm_x1+norm_x2);
-   MP_avg[step]=(MP_1[step]*norm_p1+MP_2[step]*norm_p2)/(norm_p1+norm_p2); 
 }
+
 /*----------------------------------------------------------------------------*/
 void pop_states() {
   int i;
@@ -498,15 +440,15 @@ void pop_states() {
 void print_pop(int step, FILE *f5) {
   int i;
 
-    fprintf(f5,"%8i %15.10f %15.10f\n",step,P1,P2);
-} 
-      
+  fprintf(f5,"%8i %15.10f %15.10f\n",step,P1,P2);
+}
+
 /*-------------------------------------------------------------------------------
   Print the potential
 -------------------------------------------------------------------------------*/
 
 void print_pot_ad(FILE *f4) {
-  
+
   int i;
   double x;
 
@@ -517,61 +459,61 @@ void print_pot_ad(FILE *f4) {
 }
 /*-------------------------------------------------------------------------------*/
 void print_pot_di(FILE *f6) {
-  
+
   int i;
   double x;
 
   for (i=1; i<=NX; i++) {
     x = dx*i;
     fprintf(f6,"%8i %15.10f %15.10f %15.10f %15.10f %15.10f\n"
-                ,i,x,h[i][0][0],h[i][1][1],h[i][0][1],h[i][1][0]);
+            ,i,x,h[i][0][0],h[i][1][1],h[i][0][1],h[i][1][0]);
   }
 }
 /*-------------------------------------------------------------------------------*/
 void calc_norm() {
 /*------------------------------------------------------------------------------
-  Calculate the norm                        
+  Calculate the norm
 -------------------------------------------------------------------------------*/
-  
- int sx;
- double psisq,psisq2;
 
- norm=0.0;
+  int sx;
+  double psisq,psisq2;
 
- for (sx=1; sx<=NX; sx++)                              // domod from 1 to NX (not NX+1) 
- {
-  psisq=C1[sx][0]*C1[sx][0]+C1[sx][1]*C1[sx][1]+
-        C2[sx][0]*C2[sx][0]+C2[sx][1]*C2[sx][1];
-  psisq2=C1[sx+1][0]*C1[sx+1][0]+C1[sx+1][1]*C1[sx+1][1]+
-         C2[sx+1][0]*C2[sx+1][0]+C2[sx+1][1]*C2[sx+1][1];
-  norm=norm+dx*((psisq2+psisq)/2.0);
- }
+  norm=0.0;
+
+  for (sx=1; sx<=NX; sx++)                              // domod from 1 to NX (not NX+1)
+  {
+    psisq=C1[sx][0]*C1[sx][0]+C1[sx][1]*C1[sx][1]+
+          C2[sx][0]*C2[sx][0]+C2[sx][1]*C2[sx][1];
+    psisq2=C1[sx+1][0]*C1[sx+1][0]+C1[sx+1][1]*C1[sx+1][1]+
+           C2[sx+1][0]*C2[sx+1][0]+C2[sx+1][1]*C2[sx+1][1];
+    norm=norm+dx*((psisq2+psisq)/2.0);
+  }
   norm=sqrt(norm);
 }
 
 /*-------------------------------------------------------------------------------*/
 void print_wavefn(int step, FILE *f2, FILE *f3) {
-  
- int sx;
- double x;
 
- fprintf(f2,"\n"); 
- fprintf(f2,"\n"); 
- for (sx=1; sx<=NX; sx++)
- {
-  x=dx*sx;
-  fprintf(f2,"%8i %15.10f %15.10f %15.10f\n",sx,x,
-    ((C1[sx][0]*C1[sx][0]+C1[sx][1]*C1[sx][1])/100.0)+E[1][1], // "/100" for visualization purpose  
-    ((C2[sx][0]*C2[sx][0]+C2[sx][1]*C2[sx][1])/100.0)+E[1][0]);  //nb1
- }
+  int sx;
+  double x;
+
+  fprintf(f2,"\n");
+  fprintf(f2,"\n");
+  for (sx=1; sx<=NX; sx++)
+  {
+    x=dx*sx;
+    fprintf(f2,"%8i %15.10f %15.10f %15.10f\n",sx,x,
+            ((C1[sx][0]*C1[sx][0]+C1[sx][1]*C1[sx][1])/100), // "/100" for visualization purpose
+            ((C2[sx][0]*C2[sx][0]+C2[sx][1]*C2[sx][1])/100));  //nb1
+  }
 
   if (step>0)
   {
-  fprintf(f3,"%8i %15.10f\n",step,norm);
+    fprintf(f3,"%8i %15.10f\n",step,norm);
   }
 }
 /*----------------------------------------------------------------------------*/
 void print_avg(int step, FILE *f7) {
-   fprintf(f7, "%8i %15.10f %15.10f %15.10f %15.10f %15.10f %15.10f %15.10f\n",step,DT*step,X1[step],X2[step],X_avg[step],MP_1[step],MP_2[step],MP_avg[step]);
+  fprintf(f7, "%8i %15.10f %15.10f %15.10f %15.10f %15.10f %15.10f %15.10f\n",step,DT*step,X1[step],X2[step],X_avg[step],MP_1[step],MP_2[step],MP_avg[step]);
 }
 /*----------------------------------------------------------------------------*/
