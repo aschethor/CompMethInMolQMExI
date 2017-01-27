@@ -1,0 +1,1 @@
+add_executable(project MSOFT.c MSOFT.h)

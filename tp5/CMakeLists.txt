@@ -1,0 +1,1 @@
+add_executable(tp5 MSOFT.c MSOFT.h)

@@ -1,0 +1,1 @@
+add_executable(tp4 SOFT.c SOFT.h)
