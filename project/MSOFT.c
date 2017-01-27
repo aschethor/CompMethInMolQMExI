@@ -7,7 +7,6 @@
 int main(int argc, char **argv) {
 
   int step; /* Simulation loop iteration index */
- 
 
   FILE *f2=fopen("psisq.dat","w");
   FILE *f3=fopen("norm.dat","w");
