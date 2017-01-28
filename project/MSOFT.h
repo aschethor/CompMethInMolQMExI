@@ -4,10 +4,11 @@ File MSOFT.h is a header file for program MSOFT.c.
 #define NX 1024   /* Number of mesh points */
 #define NSTEP 8000 /* number of simulation step*/
 #define SWAP(a,b) tempr=(a);(a)=(b);(b)=tempr
+#define nb_traj 10 /* Number of trajectory for TSH*/
 
 /* Function prototypes ********************************************************/
 void init_param();
-void init_prop(FILE *f7);
+void init_prop();
 void init_wavefn();
 void single_step(int step);
 void pot_prop();
@@ -20,13 +21,18 @@ void update_C1();
 void update_C2();
 void calc_norm();
 void calc_eigenvalues(int i);
-void calc_De_and_Det(int i, FILE *f7);
+void calc_De_and_Det(int i);
 void pop_states();
 void print_pop(int step, FILE *f5);
 void print_pot_ad(FILE *f4);
 void print_pot_di(FILE *f6);
 void print_wavefn(int step, FILE *f2, FILE *f3);
 void print_avg(int step, FILE *f7);
+
+/* Function prototype for Tully surface hopping*/
+void tsh_single_step();
+void generate_trajectory();
+void pop_tsh_state();
 
 /* Input parameters ***********************************************************/
 double LX;       /* Simulation box length */
@@ -75,6 +81,13 @@ double X1[NSTEP+1];
 double X2[NSTEP+1];
 double MP_avg[NSTEP+1];
 double X_avg[NSTEP+1];
+
+/*variable for trajectory
+ * parameter 1=position
+ * parameter 2=momentum
+ * parameter 3=electronic surface
+ * *****************************/
+double traj[nb_traj][3];
 
 /* Variables *******************************************************************
 dx   = Mesh spacing

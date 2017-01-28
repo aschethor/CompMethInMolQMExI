@@ -13,17 +13,19 @@ int main(int argc, char **argv) {
   FILE *f4=fopen("potential_ad.dat","w");
   FILE *f5=fopen("population.dat","w");
   FILE *f6=fopen("potential_di.dat","w");
-  FILE *f7=fopen("test.dat","w");
+  //FILE *f7=fopen("test.dat","w");
 
   init_param();  /* Initialize input parameters */
-  init_prop(f7);   /* Initialize the kinetic & potential propagators */
+  init_prop();   /* Initialize the kinetic & potential propagators */
   init_wavefn(); /* Initialize the electron wave function */
+  generate_trajectory(); /* Generate the trajectory for Tully Surface hopping*/
   print_pot_ad(f4);
   print_pot_di(f6);
   print_wavefn(0,f2,f3); /* print initial conditions */
 
   for (step=1; step<=NSTEP; step++) {
     single_step(step); /* Time propagation for one step, DT */
+    tsh_single_step();
     if (step%NECAL==0) {
       pop_states();
       print_pop(step,f5);
@@ -52,7 +54,7 @@ void init_param() {
 }
 
 /*----------------------------------------------------------------------------*/
-void init_prop(FILE *f7) {
+void init_prop() {
 /*------------------------------------------------------------------------------
   Initializes the kinetic & potential propagators.
 ------------------------------------------------------------------------------*/
@@ -121,7 +123,7 @@ void init_prop(FILE *f7) {
     /* calc eigenvalues of h */
     calc_eigenvalues(i);
     /* calc De and Det */
-    calc_De_and_Det(i,f7);
+    calc_De_and_Det(i);
     /* Half-step diagonal propagator */
     /* 1st component */
     u[i][0][0] = cos(-0.5*DT*E[i][0]);
@@ -180,6 +182,26 @@ void init_wavefn() {
   periodic_bc();
 }
 
+/*----------------------------------------------------------------------------*/
+void generate_trajectory(){
+    /*Generate trajectory according to a Gaussian distribution to mimick the shape of wavepacket*/
+    int nb,sx,pop_x,nb_index;
+    double x;
+    double pop_size=1/nb_traj;
+
+    nb=1;
+    for (sx=1;sx<=NX;sx++){ /*May need some improvement*/
+      x = -0.2*LX+ dx*sx;
+      pop_x=(int)((C1[sx][0]*C1[sx][0]+C1[sx][1]+C1[sx][1])*dx);
+      if ((int)(pop_x/pop_size)>1) {
+          for (nb_index = nb; nb_index <= (nb + pop_x / pop_size); nb_index++) {
+              traj[nb_index][1] = x;
+          }
+          nb=nb_index+1;
+      }
+    }
+
+}
 /*----------------------------------------------------------------------------*/
 void periodic_bc() {
 /*------------------------------------------------------------------------------
@@ -291,7 +313,7 @@ void calc_eigenvalues(int i) {
   E[i][1] = (h[i][0][0]+h[i][1][1]-sqrt((h[i][0][0]-h[i][1][1])*(h[i][0][0]-h[i][1][1])+4*h[i][0][1]*h[i][1][0]))/2;
 }
 /*----------------------------------------------------------------------------*/
-void calc_De_and_Det(int i, FILE *f7) {
+void calc_De_and_Det(int i) {
   double norm_fac;
   /* De */
   if(i<=intersect) {
@@ -320,7 +342,6 @@ void calc_De_and_Det(int i, FILE *f7) {
   Det[i][1][1] = De[i][1][1];
   Det[i][1][0] = De[i][0][1];
   Det[i][0][1] = De[i][1][0];
-  fprintf(f7,"%15.10f %15.10f %15.10f %15.10f\n",Det[i][0][0],Det[i][0][1],Det[i][1][0],Det[i][1][1]);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -392,7 +413,6 @@ void single_step(int step) {
   Propagates the wave function for a unit time step, DT.
 ------------------------------------------------------------------------------*/
   int j, s, i, ibis;
-  /*double  x, k, x1, x2, p_1, p_2, csq1r, csq2r, csq1p, csq2p, norm_x1, norm_x2, norm_p1, norm_p2;*/ /*minuscule*/
   /* half step potential propagation */
   pot_prop();
   /* fft of the 2 components of <r|psi> */
@@ -422,7 +442,51 @@ void single_step(int step) {
   /* half step potential propagation */
   pot_prop();
 }
+/*----------------------------------------------------------------------------*/
+void tsh_single_step(){
+/*------------------------------------------------------------------------------
+  Propagates the trajectory for a unit time step, DT.
+------------------------------------------------------------------------------*/
+    int nb,surf_1,surf_2,pos;
+    double f_t,f_tdt,hop_prob,random_nb,new_energy;
+    /*Computation of the classical dynamic*/
+    for (nb=1;nb<=nb_traj;nb++){
+        /*Verley-Velocity algorithm*/
+        f_t= ;/*compute the force at position x(t) => Use Hellmann-Feynmann theorem to compute force*/
+        traj[nb][1]=traj[nb][1]+(traj[nb][2]*DT/(M))+(f_t*DT*DT/(2*M)); /*Compute the new position*/
+        f_tdt= 10 ; /*compute the force at position x(t+dt)*/
+        traj[nb][2]=traj[nb][2]+((f_tdt+f_t)*DT/(2)); /*Compute the new momentum*/
+    }
+    /*Compute the evolution of the quantum amplitude A */
 
+    /*Compute the amplitude transfer by hop*/
+    for (surf_1=0;surf_1<=1;surf_1++) {
+        for(surf_2=0;surf_2<=1;surf_2++){
+            /*Compute the hop probability*/
+            if(surf_1!=surf_2) {
+                hop_prob = ;
+                for (nb = 1; nb <= nb_traj; nb++) {
+                    if (traj[nb][3] == surf_1) {
+                        /*Generate a random number between 0 and 1*/
+                        random_nb = (double)(rand() / RAND_MAX);
+                        /*Transfer of population if condition satisfied*/
+                        if(random_nb<=hop_prob){
+                            pos=(int)(traj[nb][1]+0.2*LX/dx);/*Compute the index of position*/
+                            new_energy=(traj[nb][2]*traj[nb][2]/(2*M))+E[pos][surf_1]-E[pos][surf_2]; /*!!!Need a check for energy conservation*/
+                            if (new_energy>0){ /*condition to ignore frustrated hop*/
+                                traj[nb][3]=surf_2;/*Transfer of population*/
+                                traj[nb][2]=sqrt(new_energy*2*M);/*Change of momentum for energy conservation*/
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+
+}
 /*----------------------------------------------------------------------------*/
 void pop_states() {
   int i;
