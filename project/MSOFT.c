@@ -19,6 +19,7 @@ int main(int argc, char **argv) {
   init_prop();   /* Initialize the kinetic & potential propagators */
   init_wavefn(); /* Initialize the electron wave function */
   generate_trajectory(); /* Generate the trajectory for Tully Surface hopping*/
+  pop_tsh_state();
   print_pot_ad(f4);
   print_pot_di(f6);
   print_wavefn(0,f2,f3); /* print initial conditions */
@@ -26,6 +27,7 @@ int main(int argc, char **argv) {
   for (step=1; step<=NSTEP; step++) {
     single_step(step); /* Time propagation for one step, DT */
     tsh_single_step();
+    pop_tsh_state();
     if (step%NECAL==0) {
       pop_states();
       print_pop(step,f5);
@@ -116,7 +118,6 @@ void init_prop() {
 
     if (h[i][1][1]>h[i][0][0]){
       intersect=i;
-      printf("%8i\n",intersect);
     }
 
 
@@ -188,7 +189,7 @@ void generate_trajectory(){
     int nb,sx,pop_x,nb_index;
     double x;
     double pop_size=1/nb_traj;
-
+    double p0=55;
     nb=1;
     for (sx=1;sx<=NX;sx++){ /*May need some improvement*/
       x = -0.2*LX+ dx*sx;
@@ -196,6 +197,8 @@ void generate_trajectory(){
       if ((int)(pop_x/pop_size)>1) {
           for (nb_index = nb; nb_index <= (nb + pop_x / pop_size); nb_index++) {
               traj[nb_index][1] = x;
+              traj[nb_index][2]= p0;
+              traj[nb_index][3]=0;
           }
           nb=nb_index+1;
       }
@@ -452,9 +455,9 @@ void tsh_single_step(){
     /*Computation of the classical dynamic*/
     for (nb=1;nb<=nb_traj;nb++){
         /*Verley-Velocity algorithm*/
-        f_t= ;/*compute the force at position x(t) => Use Hellmann-Feynmann theorem to compute force*/
+        f_t=0 ;/*compute the force at position x(t) => Use Hellmann-Feynmann theorem to compute force*/
         traj[nb][1]=traj[nb][1]+(traj[nb][2]*DT/(M))+(f_t*DT*DT/(2*M)); /*Compute the new position*/
-        f_tdt= 10 ; /*compute the force at position x(t+dt)*/
+        f_tdt=0 ; /*compute the force at position x(t+dt)*/
         traj[nb][2]=traj[nb][2]+((f_tdt+f_t)*DT/(2)); /*Compute the new momentum*/
     }
     /*Compute the evolution of the quantum amplitude A */
@@ -464,11 +467,11 @@ void tsh_single_step(){
         for(surf_2=0;surf_2<=1;surf_2++){
             /*Compute the hop probability*/
             if(surf_1!=surf_2) {
-                hop_prob = ;
+                hop_prob =0.5 ;
                 for (nb = 1; nb <= nb_traj; nb++) {
                     if (traj[nb][3] == surf_1) {
                         /*Generate a random number between 0 and 1*/
-                        random_nb = (double)(rand() / RAND_MAX);
+                        random_nb = (double)rand()/RAND_MAX;
                         /*Transfer of population if condition satisfied*/
                         if(random_nb<=hop_prob){
                             pos=(int)(traj[nb][1]+0.2*LX/dx);/*Compute the index of position*/
@@ -498,6 +501,23 @@ void pop_states() {
   }
   P1 *= dx;
   P2 *= dx;
+}
+/*----------------------------------------------------------------------------*/
+void pop_tsh_state(){
+    double pop_1,pop_2;
+    int nb;
+
+    pop_1=0;
+    pop_2=0;
+    for (nb=1;nb<=nb_traj;nb++){
+        if (traj[nb][3]==0){
+            pop_1++;
+        }
+        else{
+            pop_2++;
+        }
+    }
+    printf("%15.10f %15.10f\n",pop_1/nb_traj,pop_2/nb_traj);
 }
 /*----------------------------------------------------------------------------*/
 

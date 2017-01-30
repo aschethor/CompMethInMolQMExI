@@ -2,9 +2,10 @@
 File MSOFT.h is a header file for program MSOFT.c.
 *******************************************************************************/
 #define NX 1024   /* Number of mesh points */
-#define NSTEP 8000 /* number of simulation step*/
+#define NSTEP 1000 /* number of simulation step*/
 #define SWAP(a,b) tempr=(a);(a)=(b);(b)=tempr
-#define nb_traj 10 /* Number of trajectory for TSH*/
+#define nb_traj 10000 /* Number of trajectory for TSH*/
+
 
 /* Function prototypes ********************************************************/
 void init_param();
