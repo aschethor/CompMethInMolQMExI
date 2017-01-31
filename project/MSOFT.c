@@ -14,21 +14,21 @@ int main(int argc, char **argv) {
   FILE *f4=fopen("potential_ad.dat","w");
   FILE *f5=fopen("population.dat","w");
   FILE *f6=fopen("potential_di.dat","w");
-  //FILE *f7=fopen("test.dat","w");
+  FILE *f7=fopen("population_tsh.dat","w");
 
   init_param();  /* Initialize input parameters */
   init_prop();   /* Initialize the kinetic & potential propagators */
   init_wavefn(); /* Initialize the electron wave function */
   generate_trajectory(); /* Generate the trajectory for Tully Surface hopping*/
-  pop_tsh_state();
+  pop_tsh_state(f7,0);
   print_pot_ad(f4);
   print_pot_di(f6);
   print_wavefn(0,f2,f3); /* print initial conditions */
-
+    printf("%8i %15.10f %15.10f %15.10f\n",0,traj[1][0],traj[1][1],traj[1][2]);
   for (step=1; step<=NSTEP; step++) {
     single_step(step); /* Time propagation for one step, DT */
-    tsh_single_step();
-    pop_tsh_state();
+    tsh_single_step(step);
+    pop_tsh_state(f7,step);
     if (step%NECAL==0) {
       pop_states();
       print_pop(step,f5);
@@ -215,24 +215,37 @@ void generate_trajectory(){
     double x,pop_x;
     double pop_size=(double)1/nb_traj;
     double p0=55;
-    nb=0;
-    for (sx=1;sx<=NX;sx++){ /*May need some improvement*/
-      x = -0.5*LX+ dx*sx;
-      pop_x=((C1[sx][0]*C1[sx][0]+C1[sx][1]*C1[sx][1])*dx);
-      if ((pop_x/pop_size)>1) {
-          for (nb_index = nb; nb_index <= (nb + pop_x / pop_size-1); nb_index++) {
-              traj[nb_index][0] = x;
-              traj[nb_index][1]= p0;
-              traj[nb_index][2]=1;
+    double x0=-5.0;
+    double s=1.0;
 
-              c[nb_index][1][0]=1;
-              c[nb_index][1][1]=0;
-              c[nb_index][0][0]=0;
-              c[nb_index][0][1]=0;
-          }
-          nb=nb_index+1;
-      }
+    /*Gaussian distribution*/
+    /*for (nb_index=0;nb_index<nb_traj;nb_index++){
+        x=box_muller(x0,s);
+        printf("%15.10f\n",x);
+        traj[nb_index][0] = x;
+        traj[nb_index][1] = p0;
+        traj[nb_index][2] = 1;
+
+        c[nb_index][1][0] = 1;
+        c[nb_index][1][1] = 0;
+        c[nb_index][0][0] = 0;
+        c[nb_index][0][1] = 0;
+
+    }*/
+     /*Homongenous distribution*/
+     /**/
+     for (nb_index=0;nb_index<nb_traj;nb_index++){
+        traj[nb_index][0] = x0;
+        traj[nb_index][1] = p0;
+        traj[nb_index][2] = 1;
+
+        c[nb_index][1][0] = 1;
+        c[nb_index][1][1] = 0;
+        c[nb_index][0][0] = 0;
+        c[nb_index][0][1] = 0;
+
     }
+    /**/
 
 }
 /*----------------------------------------------------------------------------*/
@@ -525,7 +538,7 @@ void single_step(int step) {
   pot_prop();
 }
 /*----------------------------------------------------------------------------*/
-void tsh_single_step(){
+void tsh_single_step(int step){
 /*------------------------------------------------------------------------------
   Propagates the trajectory for a unit time step, DT.
 ------------------------------------------------------------------------------*/
@@ -629,22 +642,32 @@ void tsh_single_step(){
 
         /*Compute the hop probability*/
         hop_prob = DT*b[nb][surf_2][surf_1]/a[nb][surf_1][surf_1][0];
+
         /*Generate a random number between 0 and 1*/
         random_nb = (double) rand() / RAND_MAX;
+
+        if(nb==1){
+            printf("parameter:%15.10f %15.10f %15.10f\n",DT,b[1][surf_2][surf_1],a[1][surf_1][surf_1][0]);
+            printf("probability:%15.10f %15.10f\n",hop_prob,random_nb);
+        }
+
         /*Transfer of population if condition satisfied*/
         if (random_nb <= hop_prob) {
-            pos = (int) (traj[nb][1] + 0.2 * LX / dx);/*Compute the index of position*/
-            new_energy = (traj[nb][2] * traj[nb][2] / (2 * M)) + E[pos][surf_1] -
+            pos = (int) (traj[nb][0] + 0.2 * LX / dx);/*Compute the index of position*/
+            new_energy = (traj[nb][1] * traj[nb][1] / (2 * M)) + E[pos][surf_1] -
                          E[pos][surf_2]; /*!!!Need a check for energy conservation*/
+            if(nb==1){
+                printf("%15.10f %15.10f\n",new_energy,traj[1][2]);
+            }
             if (new_energy > 0) { /*condition to ignore frustrated hop*/
-                traj[nb][3] = surf_2;/*Transfer of population*/
-                traj[nb][2] = sqrt(new_energy * 2 * M);/*Change of momentum for energy conservation*/
+                traj[nb][2] = surf_2;/*Transfer of population*/
+                traj[nb][1] = sqrt(new_energy * 2 * M);/*Change of momentum for energy conservation*/
             }
         }
 
     }
 
-
+    printf("%8i %15.10f %15.10f %15.10f\n",step,traj[1][0],traj[1][1],traj[1][2]);
 
 
 
@@ -679,21 +702,21 @@ void pop_states() {
   P2 *= dx;
 }
 /*----------------------------------------------------------------------------*/
-void pop_tsh_state(){
+void pop_tsh_state(FILE *f7,int step){
     double pop_1,pop_2;
     int nb;
 
     pop_1=0;
     pop_2=0;
     for (nb=0;nb<nb_traj;nb++){
-        if (traj[nb][3]==0){
+        if (traj[nb][2]==1){
             pop_1++;
         }
-        if (traj[nb][3]==1){
+        if (traj[nb][2]==0){
             pop_2++;
         }
     }
-    printf("%15.10f %15.10f\n",pop_1/nb_traj,pop_2/nb_traj);
+    fprintf(f7,"%8i %15.10f %15.10f\n",step,pop_1/nb_traj,pop_2/nb_traj);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -777,3 +800,39 @@ void print_avg(int step, FILE *f7) {
   fprintf(f7, "%8i %15.10f %15.10f %15.10f %15.10f %15.10f %15.10f %15.10f\n",step,DT*step,X1[step],X2[step],X_avg[step],MP_1[step],MP_2[step],MP_avg[step]);
 }
 /*----------------------------------------------------------------------------*/
+extern float ranf();         /* ranf() is uniform in 0..1 */
+
+
+double box_muller(double m, double s)	/* normal random variate generator */
+{				        /* mean m, standard deviation s */
+    double x1, x2, y1;
+    double w;
+    double nb_1,nb_2;
+    static double y2;
+    static int use_last = 0;
+
+    if (use_last)		        /* use value from previous call */
+    {
+        y1 = y2;
+        use_last = 0;
+    }
+    else
+    {
+        do {
+            nb_1=(double) rand()/RAND_MAX;
+            nb_2=(double) rand() / RAND_MAX;
+            x1 = 2 * nb_1 - 1;
+            x2 = 2 * nb_2- 1;
+            w = x1 * x1 + x2 * x2;
+        } while ( w >= 1.0 );
+
+        w = sqrt( (-2 * log( w ) ) / w );
+        y1 = x1 * w;
+        y2 = x2 * w;
+        use_last = 1;
+    }
+
+    return( m + y1 * s );
+}
+
+

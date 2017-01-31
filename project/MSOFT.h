@@ -1,10 +1,10 @@
 /*******************************************************************************
 File MSOFT.h is a header file for program MSOFT.c.
 *******************************************************************************/
-#define NX 256   /* Number of mesh points */
-#define NSTEP 1 /* number of simulation step*/
+#define NX 1024   /* Number of mesh points */
+#define NSTEP 1000 /* number of simulation step*/
 #define SWAP(a,b) tempr=(a);(a)=(b);(b)=tempr
-#define nb_traj 100 /* Number of trajectory for TSH*/
+#define nb_traj 10 /* Number of trajectory for TSH*/
 
 
 /* Function prototypes ********************************************************/
@@ -31,13 +31,15 @@ void print_wavefn(int step, FILE *f2, FILE *f3);
 void print_avg(int step, FILE *f7);
 
 /* Function prototype for Tully surface hopping*/
-void tsh_single_step();
+void tsh_single_step(int step);
 void generate_trajectory();
-void pop_tsh_state();
+void pop_tsh_state(FILE *f7,int step);
 double rkg4(double (*f)(double, double, int), double y0, double x0,double h);
 double energy_diabatic(double pos,int i_1,int i_2);
 double eigenvalue_calc(double h_dia[2][2],double surf);
 double calc_eigenvector(double x, int i_1, int i_2,double h_dia[2][2],double h_adia[2]);
+
+double box_muller(double m, double s);
 
 /* Input parameters ***********************************************************/
 double LX;       /* Simulation box length */
