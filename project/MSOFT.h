@@ -90,6 +90,7 @@ double X_avg[NSTEP+1];
  * parameter 3=electronic surface
  * *****************************/
 double traj[nb_traj][3];
+double d12[NX+2];
 
 /* Variables *******************************************************************
 dx   = Mesh spacing

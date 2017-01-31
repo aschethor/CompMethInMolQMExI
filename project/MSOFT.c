@@ -46,7 +46,7 @@ void init_param() {
   Initializes parameters by reading them from standard input.
 ------------------------------------------------------------------------------*/
   /* Initialize control parameters */
-  LX=8.0;
+  LX=50.0;
   DT=0.02;
   NECAL=1;
   NNCAL=100;
@@ -97,10 +97,10 @@ void init_prop() {
   dp= 2*M_PI/LX;
   /* Set up potential propagator */
   for (i=1; i<=NX; i++) {
-    x = -0.2*LX+ dx*i;
+    x = -0.5*LX+ dx*i;
     /* Construct the matrix h */
     /*Tully 2 potential */
-    /* h[i][0][0] = A*(1-exp(-B*fabs(x)))*x/fabs(x);
+     h[i][0][0] = A*(1-exp(-B*fabs(x)))*x/fabs(x);
      h[i][0][1] = C*exp(-D*x*x);
      h[i][1][0] = h[i][0][1];
      h[i][1][1] = -h[i][0][0];
@@ -109,12 +109,12 @@ void init_prop() {
        h[i][0][1] = C;
        h[i][1][0] = C;
        h[i][1][1] = 0;
-     }*/
+     }
     /*Morse potential*/
-    h[i][0][0]=D1*(1-exp(-B1*(x-b1)))*(1-exp(-B1*(x-b1)))+E1;
+    /*h[i][0][0]=D1*(1-exp(-B1*(x-b1)))*(1-exp(-B1*(x-b1)))+E1;
     h[i][1][1]=D2*(1-exp(-B2*(x-b2)))*(1-exp(-B2*(x-b2)))+E2;
     h[i][1][0]=A12*exp(-b12*(x-Rx)*(x-Rx));
-    h[i][0][1]=h[i][1][0];
+    h[i][0][1]=h[i][1][0];*/
 
     if (h[i][1][1]>h[i][0][0]){
       intersect=i;
@@ -150,7 +150,7 @@ void init_wavefn() {
 
   /* Calculate the the wave function value mesh point-by-point */
   for (sx=1; sx<=NX; sx++) {
-    x = -0.2*LX+ dx*sx;
+    x = -0.5*LX+ dx*sx;
     gauss = exp(-S0*(x-X0)*(x-X0));
     C1[sx][0] = gauss*cos(P0*(x-X0)); 	/* wf on surface 1 */
     C1[sx][1] = gauss*sin(P0*(x-X0));
@@ -192,7 +192,7 @@ void generate_trajectory(){
     double p0=55;
     nb=0;
     for (sx=1;sx<=NX;sx++){ /*May need some improvement*/
-      x = -0.2*LX+ dx*sx;
+      x = -0.5*LX+ dx*sx;
       pop_x=(int)((C1[sx][0]*C1[sx][0]+C1[sx][1]+C1[sx][1])*dx);
       if ((int)(pop_x/pop_size)>1) {
           for (nb_index = nb; nb_index <= (nb + pop_x / pop_size); nb_index++) {
@@ -317,7 +317,7 @@ void calc_eigenvalues(int i) {
 }
 /*----------------------------------------------------------------------------*/
 void calc_De_and_Det(int i) {
-  double norm_fac,De_test;
+  double norm_fac,der_1,der_2,der_3,der_4,xpos;
   /* De */
   if(i<=intersect) {
     /* 1st column = 1st eigenvector */
@@ -345,8 +345,21 @@ void calc_De_and_Det(int i) {
   Det[i][1][1] = De[i][1][1];
   Det[i][1][0] = De[i][0][1];
   Det[i][0][1] = De[i][1][0];
-    De_test= h[i][0][1]/(E[i][0]-E[i][1]);
-    printf("%15.10f %15.10f %15.10f %15.10f %15.10f\n",Det[i][0][0],Det[i][0][1],Det[i][1][0],Det[i][1][1],De_test);
+
+    if (i>0){
+        der_1=(De[i][0][0]-De[i-1][0][0])/dx;
+        der_2=(De[i][1][0]-De[i-1][1][0])/dx;
+        der_3=(De[i][0][1]-De[i-1][0][1])/dx;
+        der_4=(De[i][1][1]-De[i-1][1][1])/dx;
+        d12[i]=De[i][0][0]*der_3+De[i][1][0]*der_4;
+        xpos=-0.5*LX+i*dx;
+        printf("%15.10f %15.10f\n",xpos,d12[i]);
+    }
+    if (i==1){
+        d12[0]=d12[1];
+    }
+
+
 }
 
 /*----------------------------------------------------------------------------*/
@@ -493,84 +506,10 @@ void tsh_single_step(){
 
 }
 /*----------------------------------------------------------------------------*/
-double rkg4( double (*f)(double, double, int), double y0, double x0,double h) {
-    /*Runge-Kutta-Gill fourth order for integration*/
-    //  Description:                                                              //
-//     The Runge-Kutta-Gill method is a Runge-Kutta method used for           //
-//     approximating the solution of the differential equation y'(x) = f(x,y) //
-//     with initial condition y = c when x = x0 numerically evaluates f(x,y)  //
-//     four times per step.                                                   //
-//     For step i+1,                                                          //
-//          y[i+1] = y[i] + 1/6*(k1+(2-sqrt(2))*k2+(2+sqrt(2))*k3+ k4) where  //
-//     k1 = h * f(x[i],y[i]),                                                 //
-//     k2 = h * f(x[i]+h/2,y[i]+k1/2),                                        //
-//     k3 = h * f(x[i]+h/2,y[i]+(-1+sqrt(2))/2*k1+(2-sqrt(2))/2*k2),          //
-//     k4 = h * f(x[i]+h, y[i]-sqrt(2)/2*k2+(2+sqrt(2))/2*k3),                //
-//     x[i] = x0 + i * h.                                                     //
-//                                                                            //
-//     This version of the Runge-Kutta method is fourth order.                //
-//     Richardson extrapolation can be used to increase the order and         //
-//     accuracy.                                                              //
-//                                                                            //
-////////////////////////////////////////////////////////////////////////////////
-#define SQRT2 1.4142135623730950488016887242096981
 
-    static const double one_sixth = 1.0 / 6.0;
-    static const double b31 = (SQRT2 - 1.0)/2.0;
-    static const double b32 = (2.0 - SQRT2)/2.0;
-    static const double b42 = -1.0/SQRT2;
-    static const double b43 = (2.0+SQRT2)/2.0;
-    static const double c2 = 2.0 - SQRT2;
-    static const double c3 = 2.0 + SQRT2;
-
-////////////////////////////////////////////////////////////////////////////////
-//  double Runge_Kutta_Gill( double (*f)(double, double), double y0,          //
-//                               double x0, double h, int number_of_steps );  //
-//                                                                            //
-//  Description:                                                              //
-//     This routine uses the 4th order Runge-Kutta method described above to  //
-//     approximate the solution at x = x0 + h * number_of_steps of the initial//
-//     value problem y'=f(x,y), y(x0) = y0.                                   //
-//                                                                            //
-//  Arguments:                                                                //
-//     double *f                                                              //
-//            Pointer to the function which returns the slope at (x,y) of the //
-//            integral curve of the differential equation y' = f(x,y) which   //
-//            passes through the point (x0,y0).                               //
-//     double y0                                                              //
-//            The initial value of y at x = x0.                               //
-//     double x0                                                              //
-//            The initial value of x.                                         //
-//     double h                                                               //
-//            The step size.                                                  //
-//     int    number_of_steps                                                 //
-//            The number of steps. Must be a nonnegative integer.             //
-//                                                                            //
-//  Return Values:                                                            //
-//     The solution of the initial value problem y' = f(x,y), y(x0) = y0 at   //
-//     x = x0 + number_of_steps * h.                                          //
-//                                                                            //
-////////////////////////////////////////////////////////////////////////////////
-
-
-        double k1, k2, k3, k4;
-        double h2 = 0.5*h;
-        double h6 = one_sixth * h;
-
-
-            k1 =  (*f)(x0,y0);
-            k2 =  (*f)(x0+h2, y0 + h2 * k1);
-            k3 =  (*f)(x0+h2, y0 + h * (b31 * k1 + b32 * k2) );
-            x0 += h;
-            k4 = (*f)(x0, y0 + h * (b42 * k2 + b43 * k3 ) );
-            y0 += h6 * ( k1 + c2 * k2 + c3 * k3 + k4 );
-
-
-        return y0;
-}
 /*----------------------------------------------------------------------------*/
 /*Differential equation*/
-double coupled_channel_R(double t, double c,int i,int pos){
+/*double coupled_channel_R(double t, double c,int i,int pos){
     double result=E[pos][i]*c;
     return result;
 }
@@ -581,7 +520,7 @@ double coupled_channel_Im(double t, double c,int i,int p){
 
 double newton_equation(){
 
-}
+}*/
 /*----------------------------------------------------------------------------*/
 void pop_states() {
   int i;
