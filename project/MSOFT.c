@@ -6,7 +6,9 @@
 
 int main(int argc, char **argv) {
 
-  int step; /* Simulation loop iteration index */
+  int step,sx; /* Simulation loop iteration index */
+
+    double energy_dia[2][2],x,energy_adia_x,energy_adia_xdx,f_t;
 
   FILE *f2=fopen("psisq.dat","w");
   FILE *f3=fopen("norm.dat","w");
@@ -135,7 +137,31 @@ void init_prop() {
     u[i][1][1] = sin(-0.5*DT*E[i][1]);
   }
 }
+/*Continuous function for potential*/
+double energy_diabatic(double x,int i_1,int i_2){
+    double h_dia[2][2];
+    /*Tully 2 potential */
 
+    h_dia[0][0] = A*(1-exp(-B*fabs(x)))*x/fabs(x);
+    h_dia[0][1] = C*exp(-D*x*x);
+    h_dia[1][0] = h_dia[0][1];
+    h_dia[1][1] = -h_dia[0][0];
+    if(x==0) {
+        intercept_cont=0;
+        h_dia[0][0] = 0;
+        h_dia[0][1] = C;
+        h_dia[1][0] = C;
+        h_dia[1][1] = 0;
+    }
+    /*Morse potential*/
+    /*h_dia[0][0]=D1*(1-exp(-B1*(x-b1)))*(1-exp(-B1*(x-b1)))+E1;
+    h_dia[1][1]=D2*(1-exp(-B2*(x-b2)))*(1-exp(-B2*(x-b2)))+E2;
+    h_dia[1][0]=A12*exp(-b12*(x-Rx)*(x-Rx));
+    h_dia[0][1]=h[i][1][0];
+    intercept_cont=Rx;
+     */
+    return h_dia[i_1][i_2];
+}
 /*----------------------------------------------------------------------------*/
 void init_wavefn() {
 /*------------------------------------------------------------------------------
@@ -144,9 +170,9 @@ void init_wavefn() {
   int sx,s;
   double x,gauss,Csq,norm_fac;
   /*Parameter for Tully surface in comment*/
-  X0=0; /*-5.8*/
+  X0=-5.8; /*-5.8*/
   S0=2.5;    /*1*/
-  P0=0;   /*55*/ //sb: 55
+  P0=55;   /*55*/ //sb: 55
 
   /* Calculate the the wave function value mesh point-by-point */
   for (sx=1; sx<=NX; sx++) {
@@ -199,6 +225,8 @@ void generate_trajectory(){
               traj[nb_index][1] = x;
               traj[nb_index][2]= p0;
               traj[nb_index][3]=0;
+              traj[nb_index][4]=1;//Real part coefficient
+              traj[nb_index][5]=0;//Imaginary part coefficient
           }
           nb=nb_index+1;
       }
@@ -315,9 +343,14 @@ void calc_eigenvalues(int i) {
   E[i][0] = (h[i][0][0]+h[i][1][1]+sqrt((h[i][0][0]-h[i][1][1])*(h[i][0][0]-h[i][1][1])+4*h[i][0][1]*h[i][1][0]))/2;
   E[i][1] = (h[i][0][0]+h[i][1][1]-sqrt((h[i][0][0]-h[i][1][1])*(h[i][0][0]-h[i][1][1])+4*h[i][0][1]*h[i][1][0]))/2;
 }
+
+double eigenvalue_calc(double h_dia[2][2],double surf){
+    double E=(h_dia[0][0]+h_dia[1][1]+pow(-1,surf)*sqrt((h_dia[0][0]-h_dia[1][1])*(h_dia[0][0]-h_dia[1][1])+4*h_dia[0][1]*h_dia[1][0]))/2;
+    return E;
+}
 /*----------------------------------------------------------------------------*/
 void calc_De_and_Det(int i) {
-  double norm_fac,der_1,der_2,der_3,der_4,xpos;
+  double norm_fac,der_1,der_2,der_3,der_4;
   /* De */
   if(i<=intersect) {
     /* 1st column = 1st eigenvector */
@@ -352,8 +385,6 @@ void calc_De_and_Det(int i) {
         der_3=(De[i][0][1]-De[i-1][0][1])/dx;
         der_4=(De[i][1][1]-De[i-1][1][1])/dx;
         d12[i]=De[i][0][0]*der_3+De[i][1][0]*der_4;
-        xpos=-0.5*LX+i*dx;
-        printf("%15.10f %15.10f\n",xpos,d12[i]);
     }
     if (i==1){
         d12[0]=d12[1];
@@ -467,40 +498,68 @@ void tsh_single_step(){
 ------------------------------------------------------------------------------*/
     int nb,surf_1,surf_2,pos;
     double f_t,f_tdt,hop_prob,random_nb,new_energy;
+    double energy_dia[2][2],energy_adia_x,energy_adia_xdx;
     /*Computation of the classical dynamic*/
-    for (nb=0;nb<nb_traj;nb++){
+    for (nb=0;nb<nb_traj;nb++) {
         /*Verley-Velocity algorithm or other scheme (Runge-Kutta-Gill)*/
-        f_t=0 ;/*compute the force at position x(t) => Use Hellmann-Feynmann theorem to compute force*/
-        traj[nb][1]=traj[nb][1]+(traj[nb][2]*DT/(M))+(f_t*DT*DT/(2*M)); /*Compute the new position*/
-        f_tdt=0 ; /*compute the force at position x(t+dt)*/
-        traj[nb][2]=traj[nb][2]+((f_tdt+f_t)*DT/(2)); /*Compute the new momentum*/
-    }
-    /*Compute the evolution of the quantum amplitude A */
+        energy_dia[0][0]=energy_diabatic(traj[nb][1],0,0);
+        energy_dia[1][0]=energy_diabatic(traj[nb][1],1,0);
+        energy_dia[0][1]=energy_diabatic(traj[nb][1],0,1);
+        energy_dia[1][1]=energy_diabatic(traj[nb][1],1,1);
 
-    /*Compute the amplitude transfer by hop*/
-    for (surf_1=0;surf_1<=1;surf_1++) {
-        for(surf_2=0;surf_2<=1;surf_2++){
-            /*Compute the hop probability*/
-            if(surf_1!=surf_2) {
-                hop_prob =0.5 ;
-                for (nb = 0; nb < nb_traj; nb++) {
-                    if (traj[nb][3] == surf_1) {
-                        /*Generate a random number between 0 and 1*/
-                        random_nb = (double)rand()/RAND_MAX;
-                        /*Transfer of population if condition satisfied*/
-                        if(random_nb<=hop_prob){
-                            pos=(int)(traj[nb][1]+0.2*LX/dx);/*Compute the index of position*/
-                            new_energy=(traj[nb][2]*traj[nb][2]/(2*M))+E[pos][surf_1]-E[pos][surf_2]; /*!!!Need a check for energy conservation*/
-                            if (new_energy>0){ /*condition to ignore frustrated hop*/
-                                traj[nb][3]=surf_2;/*Transfer of population*/
-                                traj[nb][2]=sqrt(new_energy*2*M);/*Change of momentum for energy conservation*/
-                            }
-                        }
-                    }
-                }
+        energy_adia_x=eigenvalue_calc(energy_dia,traj[nb][3]);
+
+        energy_dia[0][0]=energy_diabatic(traj[nb][1]+dx,0,0);
+        energy_dia[1][0]=energy_diabatic(traj[nb][1]+dx,1,0);
+        energy_dia[0][1]=energy_diabatic(traj[nb][1]+dx,0,1);
+        energy_dia[1][1]=energy_diabatic(traj[nb][1]+dx,1,1);
+
+        energy_adia_xdx=eigenvalue_calc(energy_dia,traj[nb][3]);
+
+        f_t = (energy_adia_x-energy_adia_xdx)/dx;/*compute the force at position x(t) => Use Hellmann-Feynmann theorem to compute force*/
+        //printf("%15.10f %15.10f\n",traj[nb][1],f_t);
+        traj[nb][1] =traj[nb][1]+(traj[nb][2]*DT/(M))+(f_t*DT*DT/(2*M)); /*Compute the new position*/
+
+        energy_dia[0][0]=energy_diabatic(traj[nb][1],0,0);
+        energy_dia[1][0]=energy_diabatic(traj[nb][1],1,0);
+        energy_dia[0][1]=energy_diabatic(traj[nb][1],0,1);
+        energy_dia[1][1]=energy_diabatic(traj[nb][1],1,1);
+
+        energy_adia_x=eigenvalue_calc(energy_dia,traj[nb][3]);
+
+        energy_dia[0][0]=energy_diabatic(traj[nb][1]+dx,0,0);
+        energy_dia[1][0]=energy_diabatic(traj[nb][1]+dx,1,0);
+        energy_dia[0][1]=energy_diabatic(traj[nb][1]+dx,0,1);
+        energy_dia[1][1]=energy_diabatic(traj[nb][1]+dx,1,1);
+
+        energy_adia_xdx=eigenvalue_calc(energy_dia,traj[nb][3]);
+
+        f_tdt = (energy_adia_x-energy_adia_xdx)/dx; /*compute the force at position x(t+dt)*/
+        traj[nb][2] = traj[nb][2] + ((f_tdt + f_t) * DT / (2)); /*Compute the new momentum*/
+
+        surf_1 = (int)traj[nb][3];
+        surf_2 = (int)fabs(traj[nb][3] - 1);
+        /*Compute the evolution of the quantum amplitude A */
+
+        /*Compute the hop probability*/
+        hop_prob = 0.5;
+        /*Generate a random number between 0 and 1*/
+        random_nb = (double) rand() / RAND_MAX;
+        /*Transfer of population if condition satisfied*/
+        if (random_nb <= hop_prob) {
+            pos = (int) (traj[nb][1] + 0.2 * LX / dx);/*Compute the index of position*/
+            new_energy = (traj[nb][2] * traj[nb][2] / (2 * M)) + E[pos][surf_1] -
+                         E[pos][surf_2]; /*!!!Need a check for energy conservation*/
+            if (new_energy > 0) { /*condition to ignore frustrated hop*/
+                traj[nb][3] = surf_2;/*Transfer of population*/
+                traj[nb][2] = sqrt(new_energy * 2 * M);/*Change of momentum for energy conservation*/
             }
         }
+
     }
+
+
+
 
 
 
@@ -544,7 +603,7 @@ void pop_tsh_state(){
         if (traj[nb][3]==0){
             pop_1++;
         }
-        else{
+        if (traj[nb][3]==1){
             pop_2++;
         }
     }

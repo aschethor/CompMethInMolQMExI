@@ -2,9 +2,9 @@
 File MSOFT.h is a header file for program MSOFT.c.
 *******************************************************************************/
 #define NX 1024   /* Number of mesh points */
-#define NSTEP 1000 /* number of simulation step*/
+#define NSTEP 10 /* number of simulation step*/
 #define SWAP(a,b) tempr=(a);(a)=(b);(b)=tempr
-#define nb_traj 10000 /* Number of trajectory for TSH*/
+#define nb_traj 1 /* Number of trajectory for TSH*/
 
 
 /* Function prototypes ********************************************************/
@@ -35,6 +35,8 @@ void tsh_single_step();
 void generate_trajectory();
 void pop_tsh_state();
 double rkg4(double (*f)(double, double, int), double y0, double x0,double h);
+double energy_diabatic(double pos,int i_1,int i_2);
+double eigenvalue_calc(double h_dia[2][2],double surf);
 
 /* Input parameters ***********************************************************/
 double LX;       /* Simulation box length */
@@ -47,6 +49,7 @@ double X0,S0,P0; /* Center-of-mass, spread & momentum of initial wave packet */
 double A,B,C,D;  /* Parameters of Tully potential */
 double D1,B1,b1,E1,D2,B2,b2,E2,A12,b12,Rx; /*Parameters of Morse potential*/
 double E0;
+double intercept_cont;
 /* Arrays **********************************************************************
 C1[NX+2][2]:     C1[i][0|1] is the real|imaginary part of the first component of the
 		 wave function on mesh point i
@@ -88,8 +91,10 @@ double X_avg[NSTEP+1];
  * parameter 1=position
  * parameter 2=momentum
  * parameter 3=electronic surface
+ * parameter 4=quantum amplitude (real part)
+ * parameter 5=quantum amplitude (imaginary part)
  * *****************************/
-double traj[nb_traj][3];
+double traj[nb_traj][5];
 double d12[NX+2];
 
 /* Variables *******************************************************************
