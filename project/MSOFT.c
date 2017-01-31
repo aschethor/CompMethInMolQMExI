@@ -6,9 +6,8 @@
 
 int main(int argc, char **argv) {
 
-  int step,sx; /* Simulation loop iteration index */
+  int step; /* Simulation loop iteration index */
 
-    double energy_dia[2][2],x,energy_adia_x,energy_adia_xdx,f_t;
 
   FILE *f2=fopen("psisq.dat","w");
   FILE *f3=fopen("norm.dat","w");
@@ -171,7 +170,7 @@ void init_wavefn() {
   double x,gauss,Csq,norm_fac;
   /*Parameter for Tully surface in comment*/
   X0=-5.8; /*-5.8*/
-  S0=2.5;    /*1*/
+  S0=1;    /*1*/
   P0=55;   /*55*/ //sb: 55
 
   /* Calculate the the wave function value mesh point-by-point */
@@ -212,21 +211,24 @@ void init_wavefn() {
 /*----------------------------------------------------------------------------*/
 void generate_trajectory(){
     /*Generate trajectory according to a Gaussian distribution to mimick the shape of wavepacket*/
-    int nb,sx,pop_x,nb_index;
-    double x;
-    double pop_size=1/nb_traj;
+    int nb,sx,nb_index;
+    double x,pop_x;
+    double pop_size=(double)1/nb_traj;
     double p0=55;
     nb=0;
     for (sx=1;sx<=NX;sx++){ /*May need some improvement*/
       x = -0.5*LX+ dx*sx;
-      pop_x=(int)((C1[sx][0]*C1[sx][0]+C1[sx][1]+C1[sx][1])*dx);
-      if ((int)(pop_x/pop_size)>1) {
-          for (nb_index = nb; nb_index <= (nb + pop_x / pop_size); nb_index++) {
-              traj[nb_index][1] = x;
-              traj[nb_index][2]= p0;
-              traj[nb_index][3]=0;
-              traj[nb_index][4]=1;//Real part coefficient
-              traj[nb_index][5]=0;//Imaginary part coefficient
+      pop_x=((C1[sx][0]*C1[sx][0]+C1[sx][1]*C1[sx][1])*dx);
+      if ((pop_x/pop_size)>1) {
+          for (nb_index = nb; nb_index <= (nb + pop_x / pop_size-1); nb_index++) {
+              traj[nb_index][0] = x;
+              traj[nb_index][1]= p0;
+              traj[nb_index][2]=1;
+
+              c[nb_index][1][0]=1;
+              c[nb_index][1][1]=0;
+              c[nb_index][0][0]=0;
+              c[nb_index][0][1]=0;
           }
           nb=nb_index+1;
       }
@@ -393,6 +395,37 @@ void calc_De_and_Det(int i) {
 
 }
 
+double calc_eigenvector(double x, int i_1, int i_2,double h_dia[2][2],double h_adia[2]) {
+    double norm_fac,der_1,der_2,der_3,der_4;
+    double De_coupling[2][2];
+    /* De */
+    if(x<=intercept_cont) {
+        /* 1st column = 1st eigenvector */
+        De_coupling[0][0] = h_dia[0][1]/(h_adia[0]-h_dia[0][0]);
+        De_coupling[1][0] = 1;
+        norm_fac = sqrt(De_coupling[0][0]*De_coupling[0][0]+1);
+        De_coupling[0][0] /= norm_fac;
+        De_coupling[1][0] /= norm_fac;
+        /* 2nd column = 2nd eigenvector */
+        De_coupling[0][1] = -De_coupling[1][0];
+        De_coupling[1][1] = De_coupling[0][0];
+    }
+    else {
+        /* 2nd column = 2nd eigenvector */
+        De_coupling[0][1] = h_dia[0][1]/(h_adia[1]-h_dia[0][0]);
+        De_coupling[1][1] = 1;
+        norm_fac = sqrt(De_coupling[0][1]*De_coupling[0][1]+1);
+        De_coupling[0][1] /= norm_fac;
+        De_coupling[1][1] /= norm_fac;
+        /* 1st column = 1st eigenvector */
+        De_coupling[1][0] = -De_coupling[0][1];
+        De_coupling[0][0] = De_coupling[1][1];
+    }
+
+
+
+    return De_coupling[i_1][i_2];
+}
 /*----------------------------------------------------------------------------*/
 void pot_prop() {
 /*------------------------------------------------------------------------------
@@ -499,50 +532,103 @@ void tsh_single_step(){
     int nb,surf_1,surf_2,pos;
     double f_t,f_tdt,hop_prob,random_nb,new_energy;
     double energy_dia[2][2],energy_adia_x,energy_adia_xdx;
+    double eigenvector_x[2][2],eigenvector_xdx[2][2];
+    double der_1,der_2,der_3,der_4;
+    double V[2];
+    double x,p;
     /*Computation of the classical dynamic*/
     for (nb=0;nb<nb_traj;nb++) {
         /*Verley-Velocity algorithm or other scheme (Runge-Kutta-Gill)*/
-        energy_dia[0][0]=energy_diabatic(traj[nb][1],0,0);
-        energy_dia[1][0]=energy_diabatic(traj[nb][1],1,0);
-        energy_dia[0][1]=energy_diabatic(traj[nb][1],0,1);
-        energy_dia[1][1]=energy_diabatic(traj[nb][1],1,1);
+        energy_dia[0][0]=energy_diabatic(traj[nb][0],0,0);
+        energy_dia[1][0]=energy_diabatic(traj[nb][0],1,0);
+        energy_dia[0][1]=energy_diabatic(traj[nb][0],0,1);
+        energy_dia[1][1]=energy_diabatic(traj[nb][0],1,1);
 
-        energy_adia_x=eigenvalue_calc(energy_dia,traj[nb][3]);
+        energy_adia_x=eigenvalue_calc(energy_dia,traj[nb][2]);
 
-        energy_dia[0][0]=energy_diabatic(traj[nb][1]+dx,0,0);
-        energy_dia[1][0]=energy_diabatic(traj[nb][1]+dx,1,0);
-        energy_dia[0][1]=energy_diabatic(traj[nb][1]+dx,0,1);
-        energy_dia[1][1]=energy_diabatic(traj[nb][1]+dx,1,1);
+        energy_dia[0][0]=energy_diabatic(traj[nb][0]+dx,0,0);
+        energy_dia[1][0]=energy_diabatic(traj[nb][0]+dx,1,0);
+        energy_dia[0][1]=energy_diabatic(traj[nb][0]+dx,0,1);
+        energy_dia[1][1]=energy_diabatic(traj[nb][0]+dx,1,1);
 
-        energy_adia_xdx=eigenvalue_calc(energy_dia,traj[nb][3]);
+        energy_adia_xdx=eigenvalue_calc(energy_dia,traj[nb][2]);
 
         f_t = (energy_adia_x-energy_adia_xdx)/dx;/*compute the force at position x(t) => Use Hellmann-Feynmann theorem to compute force*/
         //printf("%15.10f %15.10f\n",traj[nb][1],f_t);
-        traj[nb][1] =traj[nb][1]+(traj[nb][2]*DT/(M))+(f_t*DT*DT/(2*M)); /*Compute the new position*/
+        x=traj[nb][0];
+        traj[nb][0] =traj[nb][0]+(traj[nb][1]*DT/(M))+(f_t*DT*DT/(2*M)); /*Compute the new position*/
+        x=traj[nb][0];
 
-        energy_dia[0][0]=energy_diabatic(traj[nb][1],0,0);
-        energy_dia[1][0]=energy_diabatic(traj[nb][1],1,0);
-        energy_dia[0][1]=energy_diabatic(traj[nb][1],0,1);
-        energy_dia[1][1]=energy_diabatic(traj[nb][1],1,1);
+        energy_dia[0][0]=energy_diabatic(traj[nb][0],0,0);
+        energy_dia[1][0]=energy_diabatic(traj[nb][0],1,0);
+        energy_dia[0][1]=energy_diabatic(traj[nb][0],0,1);
+        energy_dia[1][1]=energy_diabatic(traj[nb][0],1,1);
 
-        energy_adia_x=eigenvalue_calc(energy_dia,traj[nb][3]);
+        energy_adia_x=eigenvalue_calc(energy_dia,traj[nb][2]);
 
-        energy_dia[0][0]=energy_diabatic(traj[nb][1]+dx,0,0);
-        energy_dia[1][0]=energy_diabatic(traj[nb][1]+dx,1,0);
-        energy_dia[0][1]=energy_diabatic(traj[nb][1]+dx,0,1);
-        energy_dia[1][1]=energy_diabatic(traj[nb][1]+dx,1,1);
+        energy_dia[0][0]=energy_diabatic(traj[nb][0]+dx,0,0);
+        energy_dia[1][0]=energy_diabatic(traj[nb][0]+dx,1,0);
+        energy_dia[0][1]=energy_diabatic(traj[nb][0]+dx,0,1);
+        energy_dia[1][1]=energy_diabatic(traj[nb][0]+dx,1,1);
 
-        energy_adia_xdx=eigenvalue_calc(energy_dia,traj[nb][3]);
+        energy_adia_xdx=eigenvalue_calc(energy_dia,traj[nb][2]);
 
         f_tdt = (energy_adia_x-energy_adia_xdx)/dx; /*compute the force at position x(t+dt)*/
-        traj[nb][2] = traj[nb][2] + ((f_tdt + f_t) * DT / (2)); /*Compute the new momentum*/
-
-        surf_1 = (int)traj[nb][3];
-        surf_2 = (int)fabs(traj[nb][3] - 1);
+        p=traj[nb][1];
+        traj[nb][1] = traj[nb][1] + ((f_tdt + f_t) * DT / (2)); /*Compute the new momentum*/
+        p=traj[nb][1];
+        surf_1 = (int)traj[nb][2];
+        surf_2 = (int)fabs(traj[nb][2] - 1);
         /*Compute the evolution of the quantum amplitude A */
 
+        double Rdot = traj[nb][1]/M;
+
+        energy_dia[0][0]=energy_diabatic(traj[nb][0],0,0);
+        energy_dia[1][0]=energy_diabatic(traj[nb][0],1,0);
+        energy_dia[0][1]=energy_diabatic(traj[nb][0],0,1);
+        energy_dia[1][1]=energy_diabatic(traj[nb][0],1,1);
+
+        V[0]=eigenvalue_calc(energy_dia,0);
+        V[1]=eigenvalue_calc(energy_dia,1);
+
+
+        eigenvector_x[0][0]=calc_eigenvector(traj[nb][0],0,0,energy_dia,V);
+        eigenvector_x[0][1]=calc_eigenvector(traj[nb][0],0,1,energy_dia,V);
+        eigenvector_x[1][0]=calc_eigenvector(traj[nb][0],1,0,energy_dia,V);
+        eigenvector_x[1][1]=calc_eigenvector(traj[nb][0],1,1,energy_dia,V);
+
+        eigenvector_xdx[0][0]=calc_eigenvector(traj[nb][0]+dx,0,0,energy_dia,V);
+        eigenvector_xdx[0][1]=calc_eigenvector(traj[nb][0]+dx,0,1,energy_dia,V);
+        eigenvector_xdx[1][0]=calc_eigenvector(traj[nb][0]+dx,1,0,energy_dia,V);
+        eigenvector_xdx[1][1]=calc_eigenvector(traj[nb][0]+dx,1,1,energy_dia,V);
+
+        der_1=(eigenvector_xdx[0][0]-eigenvector_x[0][0])/dx;
+        der_2=(eigenvector_xdx[1][0]-eigenvector_x[1][0])/dx;
+        der_3=(eigenvector_xdx[0][1]-eigenvector_x[0][1])/dx;
+        der_4=(eigenvector_xdx[1][1]-eigenvector_x[1][1])/dx;
+        double d=eigenvector_x[0][0]*der_3+eigenvector_x[1][0]*der_4;
+
+
+        c[nb][0][0] = c[nb][0][0] + DT*(
+                c[nb][0][1]*V[0]-c[nb][1][0]*d*Rdot);
+        c[nb][0][1] = c[nb][0][1] + DT*(
+                c[nb][0][0]*V[0]-c[nb][1][1]*d*Rdot);
+        c[nb][1][0] = c[nb][1][0] + DT*(
+                c[nb][1][1]*V[1]+c[nb][0][0]*d*Rdot);
+        c[nb][1][1] = c[nb][1][1] + DT*(
+                c[nb][1][0]*V[1]+c[nb][0][1]*d*Rdot);
+        for(int i=0;i<2;i++)
+            for(int j=0;j<2;j++) {
+                a[nb][i][j][0] = c[nb][i][0] * c[nb][j][0] + c[nb][i][1] * c[nb][j][1];
+                a[nb][i][j][1] = -c[nb][i][0] * c[nb][j][1] - c[nb][i][1] * c[nb][j][0];
+            }
+        b[nb][0][0] = -2*a[nb][0][0][1]*V[0];
+        b[nb][0][1] = -2*a[nb][0][1][0]*Rdot*d;
+        b[nb][1][0] = 2*a[nb][1][0][0]*Rdot*d;
+        b[nb][1][1] = -2*a[nb][1][1][1]*V[1];
+
         /*Compute the hop probability*/
-        hop_prob = 0.5;
+        hop_prob = DT*b[nb][surf_2][surf_1]/a[nb][surf_1][surf_1][0];
         /*Generate a random number between 0 and 1*/
         random_nb = (double) rand() / RAND_MAX;
         /*Transfer of population if condition satisfied*/
@@ -607,7 +693,7 @@ void pop_tsh_state(){
             pop_2++;
         }
     }
-    //printf("%15.10f %15.10f\n",pop_1/nb_traj,pop_2/nb_traj);
+    printf("%15.10f %15.10f\n",pop_1/nb_traj,pop_2/nb_traj);
 }
 /*----------------------------------------------------------------------------*/
 

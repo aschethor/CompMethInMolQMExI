@@ -1,10 +1,10 @@
 /*******************************************************************************
 File MSOFT.h is a header file for program MSOFT.c.
 *******************************************************************************/
-#define NX 1024   /* Number of mesh points */
-#define NSTEP 10 /* number of simulation step*/
+#define NX 256   /* Number of mesh points */
+#define NSTEP 1 /* number of simulation step*/
 #define SWAP(a,b) tempr=(a);(a)=(b);(b)=tempr
-#define nb_traj 1 /* Number of trajectory for TSH*/
+#define nb_traj 100 /* Number of trajectory for TSH*/
 
 
 /* Function prototypes ********************************************************/
@@ -37,6 +37,7 @@ void pop_tsh_state();
 double rkg4(double (*f)(double, double, int), double y0, double x0,double h);
 double energy_diabatic(double pos,int i_1,int i_2);
 double eigenvalue_calc(double h_dia[2][2],double surf);
+double calc_eigenvector(double x, int i_1, int i_2,double h_dia[2][2],double h_adia[2]);
 
 /* Input parameters ***********************************************************/
 double LX;       /* Simulation box length */
@@ -88,14 +89,15 @@ double MP_avg[NSTEP+1];
 double X_avg[NSTEP+1];
 
 /*variable for trajectory
- * parameter 1=position
- * parameter 2=momentum
- * parameter 3=electronic surface
- * parameter 4=quantum amplitude (real part)
- * parameter 5=quantum amplitude (imaginary part)
+ * parameter 0=position
+ * parameter 1=momentum
+ * parameter 2=electronic surface
  * *****************************/
-double traj[nb_traj][5];
+double traj[nb_traj][3];
 double d12[NX+2];
+double c[nb_traj][2][2];//for each trajectory [nb_traj] and for each state [2]: complex number [2]
+double a[nb_traj][2][2][2];//for each trajectory [nb_traj] and for each state k,l [2][2]: complex number [2]
+double b[nb_traj][2][2];//for each trajectory [nb_traj] and for each state k,l [2][2]: real number
 
 /* Variables *******************************************************************
 dx   = Mesh spacing

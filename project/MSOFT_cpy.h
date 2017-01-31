@@ -91,7 +91,7 @@ double X_avg[NSTEP+1];
  * *****************************/
 double traj[nb_traj][3];
 double d12[NX+2];
-double c[nb_traj][2][2];//for each trajectory [nb_traj] and for each state [2]: complex number [2]
+double c[nb_traj][2][2];//for each trajectory [nb_traj] and for each state [2] (0 for upper surface and 1 for lower surface): complex number [2]
 double a[nb_traj][2][2][2];//for each trajectory [nb_traj] and for each state k,l [2][2]: complex number [2]
 double b[nb_traj][2][2];//for each trajectory [nb_traj] and for each state k,l [2][2]: real number
 
