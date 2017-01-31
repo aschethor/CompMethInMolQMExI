@@ -190,7 +190,7 @@ void generate_trajectory(){
     double x;
     double pop_size=1/nb_traj;
     double p0=55;
-    nb=1;
+    nb=0;
     for (sx=1;sx<=NX;sx++){ /*May need some improvement*/
       x = -0.2*LX+ dx*sx;
       pop_x=(int)((C1[sx][0]*C1[sx][0]+C1[sx][1]+C1[sx][1])*dx);
@@ -317,7 +317,7 @@ void calc_eigenvalues(int i) {
 }
 /*----------------------------------------------------------------------------*/
 void calc_De_and_Det(int i) {
-  double norm_fac;
+  double norm_fac,De_test;
   /* De */
   if(i<=intersect) {
     /* 1st column = 1st eigenvector */
@@ -345,6 +345,8 @@ void calc_De_and_Det(int i) {
   Det[i][1][1] = De[i][1][1];
   Det[i][1][0] = De[i][0][1];
   Det[i][0][1] = De[i][1][0];
+    De_test= h[i][0][1]/(E[i][0]-E[i][1]);
+    printf("%15.10f %15.10f %15.10f %15.10f %15.10f\n",Det[i][0][0],Det[i][0][1],Det[i][1][0],Det[i][1][1],De_test);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -453,8 +455,8 @@ void tsh_single_step(){
     int nb,surf_1,surf_2,pos;
     double f_t,f_tdt,hop_prob,random_nb,new_energy;
     /*Computation of the classical dynamic*/
-    for (nb=1;nb<=nb_traj;nb++){
-        /*Verley-Velocity algorithm*/
+    for (nb=0;nb<nb_traj;nb++){
+        /*Verley-Velocity algorithm or other scheme (Runge-Kutta-Gill)*/
         f_t=0 ;/*compute the force at position x(t) => Use Hellmann-Feynmann theorem to compute force*/
         traj[nb][1]=traj[nb][1]+(traj[nb][2]*DT/(M))+(f_t*DT*DT/(2*M)); /*Compute the new position*/
         f_tdt=0 ; /*compute the force at position x(t+dt)*/
@@ -468,7 +470,7 @@ void tsh_single_step(){
             /*Compute the hop probability*/
             if(surf_1!=surf_2) {
                 hop_prob =0.5 ;
-                for (nb = 1; nb <= nb_traj; nb++) {
+                for (nb = 0; nb < nb_traj; nb++) {
                     if (traj[nb][3] == surf_1) {
                         /*Generate a random number between 0 and 1*/
                         random_nb = (double)rand()/RAND_MAX;
@@ -491,6 +493,96 @@ void tsh_single_step(){
 
 }
 /*----------------------------------------------------------------------------*/
+double rkg4( double (*f)(double, double, int), double y0, double x0,double h) {
+    /*Runge-Kutta-Gill fourth order for integration*/
+    //  Description:                                                              //
+//     The Runge-Kutta-Gill method is a Runge-Kutta method used for           //
+//     approximating the solution of the differential equation y'(x) = f(x,y) //
+//     with initial condition y = c when x = x0 numerically evaluates f(x,y)  //
+//     four times per step.                                                   //
+//     For step i+1,                                                          //
+//          y[i+1] = y[i] + 1/6*(k1+(2-sqrt(2))*k2+(2+sqrt(2))*k3+ k4) where  //
+//     k1 = h * f(x[i],y[i]),                                                 //
+//     k2 = h * f(x[i]+h/2,y[i]+k1/2),                                        //
+//     k3 = h * f(x[i]+h/2,y[i]+(-1+sqrt(2))/2*k1+(2-sqrt(2))/2*k2),          //
+//     k4 = h * f(x[i]+h, y[i]-sqrt(2)/2*k2+(2+sqrt(2))/2*k3),                //
+//     x[i] = x0 + i * h.                                                     //
+//                                                                            //
+//     This version of the Runge-Kutta method is fourth order.                //
+//     Richardson extrapolation can be used to increase the order and         //
+//     accuracy.                                                              //
+//                                                                            //
+////////////////////////////////////////////////////////////////////////////////
+#define SQRT2 1.4142135623730950488016887242096981
+
+    static const double one_sixth = 1.0 / 6.0;
+    static const double b31 = (SQRT2 - 1.0)/2.0;
+    static const double b32 = (2.0 - SQRT2)/2.0;
+    static const double b42 = -1.0/SQRT2;
+    static const double b43 = (2.0+SQRT2)/2.0;
+    static const double c2 = 2.0 - SQRT2;
+    static const double c3 = 2.0 + SQRT2;
+
+////////////////////////////////////////////////////////////////////////////////
+//  double Runge_Kutta_Gill( double (*f)(double, double), double y0,          //
+//                               double x0, double h, int number_of_steps );  //
+//                                                                            //
+//  Description:                                                              //
+//     This routine uses the 4th order Runge-Kutta method described above to  //
+//     approximate the solution at x = x0 + h * number_of_steps of the initial//
+//     value problem y'=f(x,y), y(x0) = y0.                                   //
+//                                                                            //
+//  Arguments:                                                                //
+//     double *f                                                              //
+//            Pointer to the function which returns the slope at (x,y) of the //
+//            integral curve of the differential equation y' = f(x,y) which   //
+//            passes through the point (x0,y0).                               //
+//     double y0                                                              //
+//            The initial value of y at x = x0.                               //
+//     double x0                                                              //
+//            The initial value of x.                                         //
+//     double h                                                               //
+//            The step size.                                                  //
+//     int    number_of_steps                                                 //
+//            The number of steps. Must be a nonnegative integer.             //
+//                                                                            //
+//  Return Values:                                                            //
+//     The solution of the initial value problem y' = f(x,y), y(x0) = y0 at   //
+//     x = x0 + number_of_steps * h.                                          //
+//                                                                            //
+////////////////////////////////////////////////////////////////////////////////
+
+
+        double k1, k2, k3, k4;
+        double h2 = 0.5*h;
+        double h6 = one_sixth * h;
+
+
+            k1 =  (*f)(x0,y0);
+            k2 =  (*f)(x0+h2, y0 + h2 * k1);
+            k3 =  (*f)(x0+h2, y0 + h * (b31 * k1 + b32 * k2) );
+            x0 += h;
+            k4 = (*f)(x0, y0 + h * (b42 * k2 + b43 * k3 ) );
+            y0 += h6 * ( k1 + c2 * k2 + c3 * k3 + k4 );
+
+
+        return y0;
+}
+/*----------------------------------------------------------------------------*/
+/*Differential equation*/
+double coupled_channel_R(double t, double c,int i,int pos){
+    double result=E[pos][i]*c;
+    return result;
+}
+double coupled_channel_Im(double t, double c,int i,int p){
+    double result=-p*d_ij;
+    return result;
+}
+
+double newton_equation(){
+
+}
+/*----------------------------------------------------------------------------*/
 void pop_states() {
   int i;
   P1=0.0;
@@ -509,7 +601,7 @@ void pop_tsh_state(){
 
     pop_1=0;
     pop_2=0;
-    for (nb=1;nb<=nb_traj;nb++){
+    for (nb=0;nb<nb_traj;nb++){
         if (traj[nb][3]==0){
             pop_1++;
         }
@@ -517,7 +609,7 @@ void pop_tsh_state(){
             pop_2++;
         }
     }
-    printf("%15.10f %15.10f\n",pop_1/nb_traj,pop_2/nb_traj);
+    //printf("%15.10f %15.10f\n",pop_1/nb_traj,pop_2/nb_traj);
 }
 /*----------------------------------------------------------------------------*/
 

@@ -34,6 +34,7 @@ void print_avg(int step, FILE *f7);
 void tsh_single_step();
 void generate_trajectory();
 void pop_tsh_state();
+double rkg4(double (*f)(double, double, int), double y0, double x0,double h);
 
 /* Input parameters ***********************************************************/
 double LX;       /* Simulation box length */
