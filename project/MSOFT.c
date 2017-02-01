@@ -25,6 +25,7 @@ int main(int argc, char **argv) {
   print_pot_di(f6);
   print_wavefn(0,f2,f3); /* print initial conditions */
     printf("%8i %15.10f %15.10f %15.10f\n",0,traj[1][0],traj[1][1],traj[1][2]);
+   // test();
   for (step=1; step<=NSTEP; step++) {
     single_step(step); /* Time propagation for one step, DT */
     tsh_single_step(step);
@@ -215,7 +216,7 @@ void generate_trajectory(){
     double x,pop_x;
     double pop_size=(double)1/nb_traj;
     double p0=55;
-    double x0=-5.0;
+    double x0=-4;
     double s=1.0;
 
     /*Gaussian distribution*/
@@ -226,10 +227,11 @@ void generate_trajectory(){
         traj[nb_index][1] = p0;
         traj[nb_index][2] = 1;
 
-        c[nb_index][1][0] = 1;
-        c[nb_index][1][1] = 0;
-        c[nb_index][0][0] = 0;
-        c[nb_index][0][1] = 0;
+        for (int i=0;i<2;i++)
+            for (int j = 0;j<2;j++)
+                for (int k = 0;k<2;k++)
+                    a[nb_index][i][j]=0;
+        a[nb_index][1][1] = 1;
 
     }*/
      /*Homongenous distribution*/
@@ -239,11 +241,13 @@ void generate_trajectory(){
         traj[nb_index][1] = p0;
         traj[nb_index][2] = 1;
 
-        c[nb_index][1][0] = 1;
-        c[nb_index][1][1] = 0;
-        c[nb_index][0][0] = 0;
-        c[nb_index][0][1] = 0;
-
+         for (int i=0;i<2;i++) {
+             for (int j = 0; j < 2; j++) {
+                 //for (int k = 0; k < 2; k++)
+                     a[nb_index][i][j] = 0;
+             }
+         }
+         a[nb_index][1][1] = 1;
     }
     /**/
 
@@ -542,112 +546,133 @@ void tsh_single_step(int step){
 /*------------------------------------------------------------------------------
   Propagates the trajectory for a unit time step, DT.
 ------------------------------------------------------------------------------*/
-    int nb,surf_1,surf_2,pos;
+    int nb,t_ind,surf_1,surf_2,pos;
     double f_t,f_tdt,hop_prob,random_nb,new_energy;
     double energy_dia[2][2],energy_adia_x,energy_adia_xdx;
     double eigenvector_x[2][2],eigenvector_xdx[2][2];
     double der_1,der_2,der_3,der_4;
-    double V[2];
+    double V[2][2],V_x[2],V_xdx[2];
     double x,p;
+    double complex d[2][2];
     /*Computation of the classical dynamic*/
     for (nb=0;nb<nb_traj;nb++) {
         /*Verley-Velocity algorithm or other scheme (Runge-Kutta-Gill)*/
-        energy_dia[0][0]=energy_diabatic(traj[nb][0],0,0);
-        energy_dia[1][0]=energy_diabatic(traj[nb][0],1,0);
-        energy_dia[0][1]=energy_diabatic(traj[nb][0],0,1);
-        energy_dia[1][1]=energy_diabatic(traj[nb][0],1,1);
+        energy_dia[0][0] = energy_diabatic(traj[nb][0], 0, 0);
+        energy_dia[1][0] = energy_diabatic(traj[nb][0], 1, 0);
+        energy_dia[0][1] = energy_diabatic(traj[nb][0], 0, 1);
+        energy_dia[1][1] = energy_diabatic(traj[nb][0], 1, 1);
 
-        energy_adia_x=eigenvalue_calc(energy_dia,traj[nb][2]);
+        energy_adia_x = eigenvalue_calc(energy_dia, traj[nb][2]);
 
-        energy_dia[0][0]=energy_diabatic(traj[nb][0]+dx,0,0);
-        energy_dia[1][0]=energy_diabatic(traj[nb][0]+dx,1,0);
-        energy_dia[0][1]=energy_diabatic(traj[nb][0]+dx,0,1);
-        energy_dia[1][1]=energy_diabatic(traj[nb][0]+dx,1,1);
+        energy_dia[0][0] = energy_diabatic(traj[nb][0] + dx, 0, 0);
+        energy_dia[1][0] = energy_diabatic(traj[nb][0] + dx, 1, 0);
+        energy_dia[0][1] = energy_diabatic(traj[nb][0] + dx, 0, 1);
+        energy_dia[1][1] = energy_diabatic(traj[nb][0] + dx, 1, 1);
 
-        energy_adia_xdx=eigenvalue_calc(energy_dia,traj[nb][2]);
+        energy_adia_xdx = eigenvalue_calc(energy_dia, traj[nb][2]);
 
-        f_t = (energy_adia_x-energy_adia_xdx)/dx;/*compute the force at position x(t) => Use Hellmann-Feynmann theorem to compute force*/
+        f_t = (energy_adia_x - energy_adia_xdx) /
+              dx;/*compute the force at position x(t) => Use Hellmann-Feynmann theorem to compute force*/
         //printf("%15.10f %15.10f\n",traj[nb][1],f_t);
-        x=traj[nb][0];
-        traj[nb][0] =traj[nb][0]+(traj[nb][1]*DT/(M))+(f_t*DT*DT/(2*M)); /*Compute the new position*/
-        x=traj[nb][0];
+        x = traj[nb][0];
+        traj[nb][0] = traj[nb][0] + (traj[nb][1] * DT / (M)) + (f_t * DT * DT / (2 * M)); /*Compute the new position*/
+        x = traj[nb][0];
 
-        energy_dia[0][0]=energy_diabatic(traj[nb][0],0,0);
-        energy_dia[1][0]=energy_diabatic(traj[nb][0],1,0);
-        energy_dia[0][1]=energy_diabatic(traj[nb][0],0,1);
-        energy_dia[1][1]=energy_diabatic(traj[nb][0],1,1);
+        energy_dia[0][0] = energy_diabatic(traj[nb][0], 0, 0);
+        energy_dia[1][0] = energy_diabatic(traj[nb][0], 1, 0);
+        energy_dia[0][1] = energy_diabatic(traj[nb][0], 0, 1);
+        energy_dia[1][1] = energy_diabatic(traj[nb][0], 1, 1);
 
-        energy_adia_x=eigenvalue_calc(energy_dia,traj[nb][2]);
+        energy_adia_x = eigenvalue_calc(energy_dia, traj[nb][2]);
 
-        energy_dia[0][0]=energy_diabatic(traj[nb][0]+dx,0,0);
-        energy_dia[1][0]=energy_diabatic(traj[nb][0]+dx,1,0);
-        energy_dia[0][1]=energy_diabatic(traj[nb][0]+dx,0,1);
-        energy_dia[1][1]=energy_diabatic(traj[nb][0]+dx,1,1);
+        energy_dia[0][0] = energy_diabatic(traj[nb][0] + dx, 0, 0);
+        energy_dia[1][0] = energy_diabatic(traj[nb][0] + dx, 1, 0);
+        energy_dia[0][1] = energy_diabatic(traj[nb][0] + dx, 0, 1);
+        energy_dia[1][1] = energy_diabatic(traj[nb][0] + dx, 1, 1);
 
-        energy_adia_xdx=eigenvalue_calc(energy_dia,traj[nb][2]);
+        energy_adia_xdx = eigenvalue_calc(energy_dia, traj[nb][2]);
 
-        f_tdt = (energy_adia_x-energy_adia_xdx)/dx; /*compute the force at position x(t+dt)*/
-        p=traj[nb][1];
+        f_tdt = (energy_adia_x - energy_adia_xdx) / dx; /*compute the force at position x(t+dt)*/
+        p = traj[nb][1];
         traj[nb][1] = traj[nb][1] + ((f_tdt + f_t) * DT / (2)); /*Compute the new momentum*/
-        p=traj[nb][1];
-        surf_1 = (int)traj[nb][2];
-        surf_2 = (int)fabs(traj[nb][2] - 1);
+        p = traj[nb][1];
+        surf_1 = (int) traj[nb][2];
+        surf_2 = (int) fabs(traj[nb][2] - 1);
+
+        if (nb == 1) {
+            printf("Surface:%8i %8i\n", surf_1, surf_2);
+        }
         /*Compute the evolution of the quantum amplitude A */
 
-        double Rdot = traj[nb][1]/M;
+        double Rdot = traj[nb][1] / M;
 
-        energy_dia[0][0]=energy_diabatic(traj[nb][0],0,0);
-        energy_dia[1][0]=energy_diabatic(traj[nb][0],1,0);
-        energy_dia[0][1]=energy_diabatic(traj[nb][0],0,1);
-        energy_dia[1][1]=energy_diabatic(traj[nb][0],1,1);
+        energy_dia[0][0] = energy_diabatic(traj[nb][0], 0, 0);
+        energy_dia[1][0] = energy_diabatic(traj[nb][0], 1, 0);
+        energy_dia[0][1] = energy_diabatic(traj[nb][0], 0, 1);
+        energy_dia[1][1] = energy_diabatic(traj[nb][0], 1, 1);
 
-        V[0]=eigenvalue_calc(energy_dia,0);
-        V[1]=eigenvalue_calc(energy_dia,1);
+        V[0][0] = eigenvalue_calc(energy_dia, 0);
+        V[0][1] = 0;
+        V[1][0] = 0;
+        V[1][1] = eigenvalue_calc(energy_dia, 1);
 
-
-        eigenvector_x[0][0]=calc_eigenvector(traj[nb][0],0,0,energy_dia,V);
-        eigenvector_x[0][1]=calc_eigenvector(traj[nb][0],0,1,energy_dia,V);
-        eigenvector_x[1][0]=calc_eigenvector(traj[nb][0],1,0,energy_dia,V);
-        eigenvector_x[1][1]=calc_eigenvector(traj[nb][0],1,1,energy_dia,V);
-
-        eigenvector_xdx[0][0]=calc_eigenvector(traj[nb][0]+dx,0,0,energy_dia,V);
-        eigenvector_xdx[0][1]=calc_eigenvector(traj[nb][0]+dx,0,1,energy_dia,V);
-        eigenvector_xdx[1][0]=calc_eigenvector(traj[nb][0]+dx,1,0,energy_dia,V);
-        eigenvector_xdx[1][1]=calc_eigenvector(traj[nb][0]+dx,1,1,energy_dia,V);
-
-        der_1=(eigenvector_xdx[0][0]-eigenvector_x[0][0])/dx;
-        der_2=(eigenvector_xdx[1][0]-eigenvector_x[1][0])/dx;
-        der_3=(eigenvector_xdx[0][1]-eigenvector_x[0][1])/dx;
-        der_4=(eigenvector_xdx[1][1]-eigenvector_x[1][1])/dx;
-        double d=eigenvector_x[0][0]*der_3+eigenvector_x[1][0]*der_4;
+        V_x[0] = eigenvalue_calc(energy_dia, 0);
+        V_x[1] = eigenvalue_calc(energy_dia, 1);
 
 
-        c[nb][0][0] = c[nb][0][0] + DT*(
-                c[nb][0][1]*V[0]-c[nb][1][0]*d*Rdot);
-        c[nb][0][1] = c[nb][0][1] + DT*(
-                c[nb][0][0]*V[0]-c[nb][1][1]*d*Rdot);
-        c[nb][1][0] = c[nb][1][0] + DT*(
-                c[nb][1][1]*V[1]+c[nb][0][0]*d*Rdot);
-        c[nb][1][1] = c[nb][1][1] + DT*(
-                c[nb][1][0]*V[1]+c[nb][0][1]*d*Rdot);
-        for(int i=0;i<2;i++)
-            for(int j=0;j<2;j++) {
-                a[nb][i][j][0] = c[nb][i][0] * c[nb][j][0] + c[nb][i][1] * c[nb][j][1];
-                a[nb][i][j][1] = -c[nb][i][0] * c[nb][j][1] - c[nb][i][1] * c[nb][j][0];
+        eigenvector_x[0][0] = calc_eigenvector(traj[nb][0], 0, 0, energy_dia, V_x);
+        eigenvector_x[0][1] = calc_eigenvector(traj[nb][0], 0, 1, energy_dia, V_x);
+        eigenvector_x[1][0] = calc_eigenvector(traj[nb][0], 1, 0, energy_dia, V_x);
+        eigenvector_x[1][1] = calc_eigenvector(traj[nb][0], 1, 1, energy_dia, V_x);
+
+        energy_dia[0][0] = energy_diabatic(traj[nb][0] + dx, 0, 0);
+        energy_dia[1][0] = energy_diabatic(traj[nb][0] + dx, 1, 0);
+        energy_dia[0][1] = energy_diabatic(traj[nb][0] + dx, 0, 1);
+        energy_dia[1][1] = energy_diabatic(traj[nb][0] + dx, 1, 1);
+
+        V_xdx[0] = eigenvalue_calc(energy_dia, 0);
+        V_xdx[1] = eigenvalue_calc(energy_dia, 1);
+
+        eigenvector_xdx[0][0] = calc_eigenvector(traj[nb][0] + dx, 0, 0, energy_dia, V_xdx);
+        eigenvector_xdx[0][1] = calc_eigenvector(traj[nb][0] + dx, 0, 1, energy_dia, V_xdx);
+        eigenvector_xdx[1][0] = calc_eigenvector(traj[nb][0] + dx, 1, 0, energy_dia, V_xdx);
+        eigenvector_xdx[1][1] = calc_eigenvector(traj[nb][0] + dx, 1, 1, energy_dia, V_xdx);
+
+        der_1 = (eigenvector_xdx[0][0] - eigenvector_x[0][0]) / dx;
+        der_2 = (eigenvector_xdx[1][0] - eigenvector_x[1][0]) / dx;
+        der_3 = (eigenvector_xdx[0][1] - eigenvector_x[0][1]) / dx;
+        der_4 = (eigenvector_xdx[1][1] - eigenvector_x[1][1]) / dx;
+
+        d[0][0] = 0;
+        d[1][0] = eigenvector_x[0][0] * der_3 + I*eigenvector_x[1][0] * der_4; //Complex number ????
+        d[0][1] = -conj(d[1][0]);
+        d[1][1] = 0;
+
+        //for (t_ind = 0; t_ind < n_t; t_ind++){
+            for (int k = 0; k < 2; k++) {
+                for (int j = 0; j < 2; j++) {
+                    for (int l = 0; l < 2; l++) {
+                        a[nb][k][j] += -I * DT * (a[nb][l][j] * (V[k][l] - I * Rdot * d[k][l])
+                                                  - a[nb][k][l] * (V[l][j] - I * Rdot * d[l][j]));
+                    }
+                }
             }
-        b[nb][0][0] = -2*a[nb][0][0][1]*V[0];
-        b[nb][0][1] = -2*a[nb][0][1][0]*Rdot*d;
-        b[nb][1][0] = 2*a[nb][1][0][0]*Rdot*d;
-        b[nb][1][1] = -2*a[nb][1][1][1]*V[1];
+        //}
+
+        for(int k=0;k<2;k++)
+            for(int l=0;l<2;l++)
+                b[nb][k][l] = 2*cimag(conj(a[nb][k][l])*V[k][l])-2*creal(conj(a[nb][k][l])*Rdot*d[k][l]);
+
 
         /*Compute the hop probability*/
-        hop_prob = DT*b[nb][surf_2][surf_1]/a[nb][surf_1][surf_1][0];
+        hop_prob = DT*creal(b[nb][surf_2][surf_1])/creal(a[nb][surf_1][surf_1]);
+
 
         /*Generate a random number between 0 and 1*/
         random_nb = (double) rand() / RAND_MAX;
 
         if(nb==1){
-            printf("parameter:%15.10f %15.10f %15.10f\n",DT,b[1][surf_2][surf_1],a[1][surf_1][surf_1][0]);
+            printf("parameter:%15.10f %15.10f %15.10f %15.10f\n",DT,cabs(d[1][0]),creal(b[1][surf_2][surf_1]),creal(a[1][surf_1][surf_1]));
             printf("probability:%15.10f %15.10f\n",hop_prob,random_nb);
         }
 
@@ -657,7 +682,7 @@ void tsh_single_step(int step){
             new_energy = (traj[nb][1] * traj[nb][1] / (2 * M)) + E[pos][surf_1] -
                          E[pos][surf_2]; /*!!!Need a check for energy conservation*/
             if(nb==1){
-                printf("%15.10f %15.10f\n",new_energy,traj[1][2]);
+                //printf("%15.10f %15.10f\n",new_energy,traj[1][2]);
             }
             if (new_energy > 0) { /*condition to ignore frustrated hop*/
                 traj[nb][2] = surf_2;/*Transfer of population*/
@@ -717,6 +742,7 @@ void pop_tsh_state(FILE *f7,int step){
         }
     }
     fprintf(f7,"%8i %15.10f %15.10f\n",step,pop_1/nb_traj,pop_2/nb_traj);
+    printf("Population:%15.10f %15.10f\n",pop_1/nb_traj,pop_2/nb_traj);
 }
 /*----------------------------------------------------------------------------*/
 
@@ -836,3 +862,43 @@ double box_muller(double m, double s)	/* normal random variate generator */
 }
 
 
+void test(){
+ double eigenvector_x[2][2],eigenvector_xdx[2][2],energy_dia[2][2],energy_adia[2],V[2];
+    double der_1,der_2,der_3,der_4,x;
+    int sx;
+    for (sx=1; sx<=NX; sx++) {
+        x = -0.5 * LX + dx * sx;
+        energy_dia[0][0] = energy_diabatic(x, 0, 0);
+        energy_dia[1][0] = energy_diabatic(x, 1, 0);
+        energy_dia[0][1] = energy_diabatic(x, 0, 1);
+        energy_dia[1][1] = energy_diabatic(x, 1, 1);
+
+        V[0] = eigenvalue_calc(energy_dia, 0);
+        V[1] = eigenvalue_calc(energy_dia, 1);
+
+        eigenvector_x[0][0] = calc_eigenvector(x, 0, 0, energy_dia, V);
+        eigenvector_x[0][1] = calc_eigenvector(x, 0, 1, energy_dia, V);
+        eigenvector_x[1][0] = calc_eigenvector(x, 1, 0, energy_dia, V);
+        eigenvector_x[1][1] = calc_eigenvector(x, 1, 1, energy_dia, V);
+
+        energy_dia[0][0] = energy_diabatic(x+dx, 0, 0);
+        energy_dia[1][0] = energy_diabatic(x+dx, 1, 0);
+        energy_dia[0][1] = energy_diabatic(x+dx, 0, 1);
+        energy_dia[1][1] = energy_diabatic(x+dx, 1, 1);
+
+        energy_adia[0]=eigenvalue_calc(energy_dia,0);
+        energy_adia[1]=eigenvalue_calc(energy_dia,1);
+
+        eigenvector_xdx[0][0] = calc_eigenvector(x + dx, 0, 0, energy_dia, energy_adia);
+        eigenvector_xdx[0][1] = calc_eigenvector(x + dx, 0, 1, energy_dia, energy_adia);
+        eigenvector_xdx[1][0] = calc_eigenvector(x + dx, 1, 0, energy_dia, energy_adia);
+        eigenvector_xdx[1][1] = calc_eigenvector(x + dx, 1, 1, energy_dia, energy_adia);
+
+        der_1 = (eigenvector_xdx[0][0] - eigenvector_x[0][0]) / dx;
+        der_2 = (eigenvector_xdx[1][0] - eigenvector_x[1][0]) / dx;
+        der_3 = (eigenvector_xdx[0][1] - eigenvector_x[0][1]) / dx;
+        der_4 = (eigenvector_xdx[1][1] - eigenvector_x[1][1]) / dx;
+        double d = eigenvector_x[0][0] * der_3 + eigenvector_x[1][0] * der_4;
+        printf("%15.10f %15.10f %15.10f %15.10f %15.10f\n",x,x+dx,eigenvector_x[0][0],eigenvector_xdx[0][0],d);
+    }
+}

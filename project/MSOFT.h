@@ -1,10 +1,12 @@
 /*******************************************************************************
 File MSOFT.h is a header file for program MSOFT.c.
 *******************************************************************************/
-#define NX 1024   /* Number of mesh points */
-#define NSTEP 1000 /* number of simulation step*/
+#define NX 1024  /* Number of mesh points */
+#define NSTEP 10000 /* number of simulation step*/
 #define SWAP(a,b) tempr=(a);(a)=(b);(b)=tempr
-#define nb_traj 10 /* Number of trajectory for TSH*/
+#define nb_traj 1000 /* Number of trajectory for TSH*/
+#define n_t 10 /*scale number of dt with respect to DT dt=DT/n_t*/
+#include "complex.h"
 
 
 /* Function prototypes ********************************************************/
@@ -40,6 +42,8 @@ double eigenvalue_calc(double h_dia[2][2],double surf);
 double calc_eigenvector(double x, int i_1, int i_2,double h_dia[2][2],double h_adia[2]);
 
 double box_muller(double m, double s);
+
+void test();
 
 /* Input parameters ***********************************************************/
 double LX;       /* Simulation box length */
@@ -97,10 +101,8 @@ double X_avg[NSTEP+1];
  * *****************************/
 double traj[nb_traj][3];
 double d12[NX+2];
-double c[nb_traj][2][2];//for each trajectory [nb_traj] and for each state [2]: complex number [2]
-double a[nb_traj][2][2][2];//for each trajectory [nb_traj] and for each state k,l [2][2]: complex number [2]
-double b[nb_traj][2][2];//for each trajectory [nb_traj] and for each state k,l [2][2]: real number
-
+double complex a[nb_traj][2][2];//for each trajectory [nb_traj] and for each state k,l [2][2]: complex number [2]
+double complex b[nb_traj][2][2];//for each trajectory [nb_traj] and for each state k,l [2][2]: real number
 /* Variables *******************************************************************
 dx   = Mesh spacing
 P1 = Population of state 1
